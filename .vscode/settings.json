@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "esp32-hal.h": "c",
+        "esp_attr.h": "c",
+        "random": "cpp"
+    }
+}
