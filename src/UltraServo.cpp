@@ -127,6 +127,14 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
   inst->tmpRpm = inst->m1Ctr;
   if (inst->runFlg)
   {
+
+    if(inst->randRun) {
+      inst->randDly --;
+      if (inst->randDly <= 0) {
+        inst->randDly = RAMPPAUSE * 1;
+        inst->targetPos = random(1000);
+      }
+    }
     if (inst->rampRun) // ramp
     {
       if (inst->rampSkip > 0)
@@ -351,9 +359,16 @@ void IRAM_ATTR UltraServo::encoderISR4()
 {
   encoderISR(instance[3]);
 }
+void UltraServo::startRandom()
+{
+  stop();
+  randDly = 0;
+  randRun = true;
 
+}
 void UltraServo::startRamp(int len)
 {
+  stop();
   rampCtr = 0;
   rampPos = 0;
   rampPeakCnt = 0;
@@ -366,6 +381,10 @@ bool UltraServo::getRampRun()
 {
   return rampRun;
 }
+bool UltraServo::getRandomRun()
+{
+  return randRun;
+}
 int UltraServo::getRampRpm()
 {
   return rampPos;
@@ -373,6 +392,10 @@ int UltraServo::getRampRpm()
 int UltraServo::getError()
 {
   return error;
+}
+int UltraServo::getVelocity()
+{
+  return velocity;
 }
 int UltraServo::getTargetPos()
 {
@@ -384,6 +407,7 @@ void UltraServo::setTargetPos(int pos)
 }
 void UltraServo::stop() {
     rampRun = false;
+    randRun = false;
 }
 void UltraServo::enable(bool flg)
 {
@@ -392,6 +416,7 @@ void UltraServo::enable(bool flg)
   {
     targetPos = 0;
     rampRun = false;
+    randRun = false;
   }
   else
   {

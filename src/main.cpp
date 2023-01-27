@@ -36,19 +36,22 @@ TFT_eSPI tft = TFT_eSPI(); /* TFT instance */
 lv_disp_draw_buf_t disp_buf;
 lv_disp_drv_t disp_drv;
 lv_indev_drv_t indev_drv;
-
 lv_color_t buf[HOR_RES * 10];
 lv_obj_t *pidchart[MOTCOUNT], *numpadScr;
-lv_chart_series_t *ser1[MOTCOUNT];
+lv_chart_series_t *ser1[MOTCOUNT],*ser2[MOTCOUNT];
 lv_obj_t *slider_label[MOTCOUNT];
 lv_obj_t *slider[MOTCOUNT];
+lv_obj_t *meter[MOTCOUNT];
+bool showErr[MOTCOUNT];
+bool showVel[MOTCOUNT];
+lv_meter_indicator_t *indic[MOTCOUNT];
 lv_obj_t *buildNumpadScreen();
 lv_obj_t *mainScr,*tabView;
 int lstTab = -1;
 extern void openNumpad(lv_obj_t *valPtr);
 void buildConfigScreen();
 lv_style_t styleBloom;
-int lstFlt[MOTCOUNT], lstEp[MOTCOUNT];
+//int lstFlt[MOTCOUNT], lstEp[MOTCOUNT];
 #if LV_USE_LOG != 0
 /* Serial debugging */
 // void my_print(lv_log_level_t level, const char *file, uint32_t line, const char *fn_name, const char *dsc)
@@ -219,7 +222,17 @@ void loop()
     {
       lv_slider_set_value(slider[i], m[i]->getRampRpm(), LV_ANIM_ON);
     }
-    lv_chart_set_next_value(pidchart[i], ser1[i], m[i]->getError() + 32);
+    if(showErr[i]) {
+      lv_chart_set_next_value(pidchart[i], ser1[i], m[i]->getError() + 32);
+    }
+    if(showVel[i]) {
+      lv_chart_set_next_value(pidchart[i], ser2[i], m[i]->getVelocity() + 32);
+      }
+    int v = m[i]->getEncPos() % COUNTSPERREVOLITION;
+    if (v < 0) v+= COUNTSPERREVOLITION;
+    lv_meter_set_indicator_end_value(meter[i], indic[i], v);
+
+    /*
     if(lv_scr_act() == mainScr ) {
       int ep1 = m[i]->getEncPos();
       int yofs = 12;
@@ -243,7 +256,9 @@ void loop()
         iy1 = sin(deg1) * r + yp;
         tft.drawLine(ix1, iy1 + yofs, xp, yp + yofs, TFT_BLACK);
       }
+
     }
+     */
   } 
 /*    if (servo1.cntFlt != lstFlt)
     {
@@ -254,6 +269,22 @@ void loop()
     }
 */
 
+}
+
+
+void rnd_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+
+  if (code == LV_EVENT_CLICKED)
+  {
+    UltraServo *s = m[lv_tabview_get_tab_act(tabView)];
+    if(s->getRandomRun()) {
+        s->stop();
+      } else {  
+           s->startRandom();
+      }
+  }
 }
 
 void ramp_event_cb(lv_event_t *e)
@@ -297,7 +328,33 @@ void slider_event_cb(lv_event_t *e)
   snprintf(buf, 4, "%u", m[i]->getTargetPos());
   lv_label_set_text(slider_label[i], buf);
 }
+void err_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  lv_obj_t *obj = lv_event_get_target(e);
+  if (code == LV_EVENT_VALUE_CHANGED)
+  {
+      int i = lv_tabview_get_tab_act(tabView);
+      showErr[i] = lv_obj_get_state(obj) & LV_STATE_CHECKED;
+      if(!showErr[i]) {
+        lv_chart_set_all_value(pidchart[i], ser1[i],LV_CHART_POINT_NONE);
+      }      
+  }
+}
 
+void vel_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  lv_obj_t *obj = lv_event_get_target(e);
+  if (code == LV_EVENT_VALUE_CHANGED)
+  {
+      int i = lv_tabview_get_tab_act(tabView);
+      showVel[i] = lv_obj_get_state(obj) & LV_STATE_CHECKED;
+      if(!showVel[i]) {
+        lv_chart_set_all_value(pidchart[i], ser2[i],LV_CHART_POINT_NONE);
+      }
+  }
+}
 void sw_event_cb(lv_event_t *e)
 {
   lv_event_code_t code = lv_event_get_code(e);
@@ -351,6 +408,8 @@ lv_obj_t *bloomButton(lv_obj_t *scr,
   return btn1;
 }
 
+
+
 lv_obj_t *floatButton(lv_obj_t *scr, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h, double *dval)
 {
   char buf[8];
@@ -370,6 +429,7 @@ void buildConfigScreen()
 {
   mainScr = lv_scr_act();
   tabView = lv_tabview_create(mainScr, LV_DIR_TOP, 30);
+
   for (int i = 0; i < MOTCOUNT; i++) {
     char buf[10];
     sprintf(buf,"Motor %d", i + 1 );
@@ -383,25 +443,20 @@ void buildConfigScreen()
     lv_obj_set_style_size(pidchart[i], 0, LV_PART_INDICATOR);
 
     ser1[i] = lv_chart_add_series(pidchart[i], lv_color_make(255, 0, 0), LV_CHART_AXIS_PRIMARY_Y);
+    ser2[i] = lv_chart_add_series(pidchart[i], lv_color_make(0, 255, 0), LV_CHART_AXIS_PRIMARY_Y);
 
     //bloomButton(scr, 0, 110, 45, 30, "Stop", stop_event_cb);
-    floatButton(tab, 0, 110, 45, 30, &m[i]->kp);
-    floatButton(tab, 50, 110, 45, 30, &m[i]->ki);
-    floatButton(tab, 100, 110, 45, 30, &m[i]->kd);
-    bloomButton(tab, 150, 110, 50, 30, "R", ramp_event_cb);
+    floatButton(tab, 0, 110, 35, 30, &m[i]->kp);
+    floatButton(tab, 40, 110, 35, 30, &m[i]->ki);
+    floatButton(tab, 80, 110, 35, 30, &m[i]->kd);
+    bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb);
+    bloomButton(tab, 160, 110, 35, 30, "Rnd", rnd_event_cb);
 
     lv_obj_t *sw = lv_switch_create(tab);
-    lv_obj_set_pos(sw, 220, 110);
+    lv_obj_set_pos(sw, 200, 110);
     lv_obj_set_size(sw, 50, 30);
     lv_obj_add_event_cb(sw, sw_event_cb, LV_EVENT_ALL,NULL);
-    //sw->user_data=(void *)"1";
-    /*
-    lv_obj_t *sw2 = lv_switch_create(tabM1);
-    lv_obj_set_pos(sw2, 260, 110);
-    lv_obj_set_size(sw2, 50, 30);
-    lv_obj_add_event_cb(sw2, sw_event_cb, LV_EVENT_ALL, NULL);
-    sw2->user_data=(void *)"2";
-  */
+  
     slider[i] = lv_slider_create(tab);
     lv_obj_set_pos(slider[i], 20, 150);
     lv_obj_set_size(slider[i], 270, 30);
@@ -411,5 +466,31 @@ void buildConfigScreen()
     slider_label[i] = lv_label_create(tab);
     lv_label_set_text(slider_label[i], "0%");
     lv_obj_align_to(slider_label[i], slider[i], LV_ALIGN_CENTER, 0, 0);
+    
+    meter[i] = lv_meter_create(tab);
+    lv_obj_set_size(meter[i], 80, 80);
+    lv_obj_set_pos(meter[i], -10, 10);
+    lv_meter_scale_t * scale = lv_meter_add_scale(meter[i]);
+    lv_meter_set_scale_ticks(meter[i], scale, 0, 0, 0, lv_palette_main(LV_PALETTE_GREY));
+    lv_meter_set_scale_range(meter[i],scale,0,COUNTSPERREVOLITION,360,0);
+    indic[i] = lv_meter_add_needle_line(meter[i], scale, 3, lv_palette_main(LV_PALETTE_GREY), 15);
+    lv_obj_clear_flag(tab, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t * cb = lv_checkbox_create(tab);
+    lv_checkbox_set_text(cb, "E");
+    lv_obj_set_style_text_color(cb,lv_palette_main(LV_PALETTE_RED),0);
+    lv_obj_set_pos(cb, 255, 105);
+    lv_obj_set_size(cb, 40, 30);
+    lv_obj_add_event_cb(cb, err_event_cb, LV_EVENT_ALL,(void *)i);
+    
+    cb = lv_checkbox_create(tab);
+    lv_checkbox_set_text(cb, "V");
+    lv_obj_set_style_text_color(cb,lv_palette_main(LV_PALETTE_GREEN),0);
+    lv_obj_set_pos(cb, 255, 125);
+    lv_obj_set_size(cb, 40, 30);
+    lv_obj_add_event_cb(cb, vel_event_cb, LV_EVENT_ALL,(void *)i);
+
   }
+
+ 
 }

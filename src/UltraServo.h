@@ -29,16 +29,19 @@ public:
 	UltraServo(int enc1pin, int enc2pin, int pwmPin, int dir1pin, int dir2pin, int sampleRate, int bias);
 	void enable(bool flg);
 	void stop();
+	void startRandom();
+	bool getRandomRun();
 	void startRamp(int);
 	bool getRampRun();
 	int getRampRpm();
 	int getError();
+	int getVelocity();
 	int getTargetPos();
 	void setTargetPos(int);
 	int getEncPos();
-	double kp = 8;
+	double kp = 5;
 	double ki = 0;
-	double kd = 9;
+	double kd = 15;
 private:
 	static void myledcWrite(uint8_t chan, uint32_t duty);
 	static void __digitalWrite(uint8_t pin, uint8_t val);
@@ -64,6 +67,10 @@ private:
 	int instNum;
 	long m1Now = 0, m1Lst = 0, m1Ctr = 0, m1Prev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
 	bool runFlg = false;
+	bool randRun = false;
+	int randDly = 0;
+	int randPos = 0;
+
 	int rampCtr = 0;
 	int rampPos = 0;
 	int rampPause = 0;
