@@ -125,14 +125,17 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
   // digitalWrite(OUTPULSE, LOW);
 
   inst->tmpRpm = inst->m1Ctr;
+  inst->error = inst->targetPos - inst->m1Ctr;
+  inst->velocity = inst->m1Ctr - inst->m1Prev;
+  inst->m1Prev = inst->m1Ctr;
+
   if (inst->runFlg)
   {
-
     if(inst->randRun) {
       inst->randDly --;
       if (inst->randDly <= 0) {
         inst->randDly = RAMPPAUSE * 1;
-        inst->targetPos = random(1000);
+        inst->targetPos = random(inst->randLen);
       }
     }
     if (inst->rampRun) // ramp
@@ -153,7 +156,7 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
           inst->rampCtr++;
           if (inst->rampCtr < inst->rampHalfLen)
           {
-            if (inst->rampPos < RAMPMAX)
+            if (inst->rampPos <= RAMPMAX)
             {
               inst->rampPos += RAMPSTEP;
             }
@@ -184,14 +187,9 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
             inst->rampPause = RAMPPAUSE;
           }
         }
+        inst->targetPos += inst->rampPos * inst->rampDir;
       }
-      inst->targetPos += inst->rampPos * inst->rampDir;
     }
-
-    inst->error = inst->targetPos - inst->m1Ctr;
-    inst->velocity = inst->m1Ctr - inst->m1Prev;
-    inst->m1Prev = inst->m1Ctr;
-
     //    int sumErrorHist = error;
     //    for (int i = NUMHIST - 1; i > 0; i--)
     //    {
@@ -236,16 +234,23 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
     {
       inst->pwm = -MAXERR;
     }
+    if (abs(inst->pwm) > STALLVAL && abs(inst->velocity) < VELMIN) {
+      inst->stallCnt++;
+      if (inst->stallCnt> STALLMAX) {
+        inst->stallFlg = true;
+        inst->enable(false);
+      }
+    }
+    else
+    {
+      inst->stallCnt=0;
+    }
   }
   else
   {
-    // inst->m1Ctr = 0;
-    // inst->m1Prev = 0;
-    inst->error = 0;
+
     inst->sumError = 0;
     inst->pwm = 0;
-    inst->rampRun = false;
-
     //   for (int i = 0; i < NUMHIST; i++)
     //   {
     //     errHist[i] = 0;
@@ -254,7 +259,6 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
 
   if (inst->pwm < 0)
   {
-
     __digitalWrite(inst->dir2pin, false);
     __digitalWrite(inst->dir1pin, true);
     myledcWrite(inst->instNum, -inst->pwm);
@@ -266,7 +270,6 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
     myledcWrite(inst->instNum, inst->pwm);
   }
   //  digitalWrite(OUTPULSE, HIGH);
-
   //  portEXIT_CRITICAL_ISR(&myMutex);
 }
 
@@ -297,11 +300,6 @@ void IRAM_ATTR UltraServo::encoderISR(UltraServo *inst)
   int m1Now =
       (((*(volatile uint32_t *)inst->enc1port) & inst->enc1mask) ? 1 : 0) |
       (((*(volatile uint32_t *)inst->enc2port) & inst->enc2mask) ? 2 : 0);
-
-  // int m1Now =
-  // ((*(volatile uint32_t *)inst->enc1port) & inst->enc1mask)?1:0
-  // |
-  // ((*(volatile uint32_t *)inst->enc2port) & inst->enc2mask)?2:0;
 
   // if / then implementation of a "state machine"
   if (inst->m1Lst == 0)
@@ -359,12 +357,12 @@ void IRAM_ATTR UltraServo::encoderISR4()
 {
   encoderISR(instance[3]);
 }
-void UltraServo::startRandom()
+void UltraServo::startRandom(int l) 
 {
   stop();
+  randLen = l;
   randDly = 0;
   randRun = true;
-
 }
 void UltraServo::startRamp(int len)
 {
@@ -411,20 +409,27 @@ void UltraServo::stop() {
 }
 void UltraServo::enable(bool flg)
 {
-  runFlg = flg;
+  runFlg = flg; 
+  m1Ctr = 0;
+  m1Prev = 0;
   if (!flg)
   {
     targetPos = 0;
     rampRun = false;
     randRun = false;
-  }
-  else
-  {
-    m1Ctr = 0;
-    m1Prev = 0;
+    m1Lst = 0;
+    m1Now = 0;
   }
 }
 int UltraServo::getEncPos()
 {
   return m1Ctr;
+}
+
+bool UltraServo::getStallFlg() {
+  return stallFlg;
+}
+
+void UltraServo::setStallFlg(bool val) {
+ stallFlg = val;
 }

@@ -8,10 +8,13 @@
 #define LEDC_TIMER(g, t) LEDC.timer_group[(g)].timer[(t)]
 #define MAXERR 255
 #define SUMMAX 255
-#define RAMPMAX 10
-#define RAMPSTEP 2
-#define RAMPSKIP 5
-#define RAMPPAUSE 20
+#define RAMPMAX 20
+#define RAMPSTEP 1
+#define RAMPSKIP 2
+#define RAMPPAUSE 100
+#define STALLMAX 1000
+#define STALLVAL 180
+#define VELMIN 2
 
 /* this supports up to 4 servos*/
 
@@ -25,11 +28,12 @@ public:
  * @param dir1pin : H bridge direction pin 1
  * @param dir2pin : H bridge direction pin 2
  * @param sampleRate : timer sample rate in HZ
+ * @param bias : minimum PWM value to get motor moving
  */
 	UltraServo(int enc1pin, int enc2pin, int pwmPin, int dir1pin, int dir2pin, int sampleRate, int bias);
 	void enable(bool flg);
 	void stop();
-	void startRandom();
+	void startRandom(int);
 	bool getRandomRun();
 	void startRamp(int);
 	bool getRampRun();
@@ -39,9 +43,11 @@ public:
 	int getTargetPos();
 	void setTargetPos(int);
 	int getEncPos();
-	double kp = 5;
+	bool getStallFlg();
+	void setStallFlg(bool);
+	double kp = 8;
 	double ki = 0;
-	double kd = 15;
+	double kd = 350;
 private:
 	static void myledcWrite(uint8_t chan, uint32_t duty);
 	static void __digitalWrite(uint8_t pin, uint8_t val);
@@ -61,7 +67,7 @@ private:
 	static void timerISR2();
 	static void timerISR3();
 	static void timerISR4();
-	
+	int randLen;
 	const int freq = 5000;
 	const int resolution = 8;
 	int instNum;
@@ -71,6 +77,8 @@ private:
 	int randDly = 0;
 	int randPos = 0;
 
+	int stallCnt = 0; // for detecting motor stall
+	bool stallFlg = false;
 	int rampCtr = 0;
 	int rampPos = 0;
 	int rampPause = 0;

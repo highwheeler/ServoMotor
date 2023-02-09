@@ -5,8 +5,6 @@
 #include <Ticker.h>
 #include <UltraServo.h>
 
-// THIS IS THE H BRIDGE PID VERSION!
-
 #define CALIBRATION_FILE "/TouchCalData"
 #define SETTINGS_FILE "/SettingsData"
 #define REPEAT_CAL false
@@ -23,16 +21,21 @@
 #define M2PIND1 14
 #define M2PIND2 12
 #define PWM2PIN 26
-#define SAMPLERATE 200
+#define SAMPLERATE 1500
 #define PWMBIAS 125
 #define MOTCOUNT 2
 #define COUNTSPERREVOLITION 445
-
+#define SEQUENCEDELAY 25;
+#define ISRFREQ 500
 UltraServo servo1(M1ENCP1, M1ENCP2, PWM1PIN, M1PIND1, M1PIND2, SAMPLERATE, PWMBIAS);
 UltraServo servo2(M2ENCP1, M2ENCP2, PWM2PIN, M2PIND1, M2PIND2, SAMPLERATE, PWMBIAS);
 UltraServo *m[MOTCOUNT] = {&servo1, &servo2};
+int seq[]={-111,0,111,0,10,20,30,40,50,60,70,80,90,100,110,-110,-100,-90,-80,-70,-60,-50,-40,-30,-20,-10,0};
+int seqPtr = 0;
+int seqDly = 0;
+bool seqRun = false;
 Ticker tick;
-TFT_eSPI tft = TFT_eSPI(); /* TFT instance */
+TFT_eSPI tft = TFT_eSPI();
 lv_disp_draw_buf_t disp_buf;
 lv_disp_drv_t disp_drv;
 lv_indev_drv_t indev_drv;
@@ -41,16 +44,25 @@ lv_obj_t *pidchart[MOTCOUNT], *numpadScr;
 lv_chart_series_t *ser1[MOTCOUNT],*ser2[MOTCOUNT];
 lv_obj_t *slider_label[MOTCOUNT];
 lv_obj_t *slider[MOTCOUNT];
+lv_obj_t *pwrsw[MOTCOUNT];
 lv_obj_t *meter[MOTCOUNT];
 bool showErr[MOTCOUNT];
 bool showVel[MOTCOUNT];
 lv_meter_indicator_t *indic[MOTCOUNT];
 lv_obj_t *buildNumpadScreen();
-lv_obj_t *mainScr,*tabView;
+lv_obj_t *mainScr,*tabView, *dropdown, *runcb;
 int lstTab = -1;
+bool repeat = false;
 extern void openNumpad(lv_obj_t *valPtr);
 void buildConfigScreen();
 lv_style_t styleBloom;
+
+int randDly = 0;
+int randPos = 0;
+int secDiv = 0;
+int mode = -1;
+
+
 //int lstFlt[MOTCOUNT], lstEp[MOTCOUNT];
 #if LV_USE_LOG != 0
 /* Serial debugging */
@@ -177,6 +189,46 @@ static void lv_tick_handler(void)
 {
   lv_tick_inc(LVGL_TICK_PERIOD);
 }
+void IRAM_ATTR timerISR()
+{
+  if(mode == 1) { // random
+    randDly --;
+    if (randDly <= 0) {
+      randDly = RAMPPAUSE * 1;
+      int targetPos = random(100);
+      for(int i = 0; i < MOTCOUNT; i++) {
+        m[i]->setTargetPos(targetPos);
+      }
+    }
+  } else if (mode == 2) { // m2 follow m1
+    m[1]->setTargetPos(m[0]->getEncPos()); 
+   } else if (mode == 3) { // m1 follow m2
+    m[0]->setTargetPos(m[1]->getEncPos());
+   } else if (mode == 4) { // m2 follow m1 rev
+    m[1]->setTargetPos(m[0]->getEncPos() * -1);
+   } else if (mode == 5) { // m1 follow m2 rev
+    m[0]->setTargetPos(m[1]->getEncPos() * -1);
+  } else if (mode == 6) { // sequence
+    if(seqDly > 0) {
+      seqDly --;
+    } else {
+      seqDly = SEQUENCEDELAY;
+      m[0]->setTargetPos(seq[seqPtr]);
+      m[1]->setTargetPos(seq[seqPtr] * -1);
+      seqPtr++;
+      if (seqPtr >= sizeof(seq) / sizeof(int)) {
+        seqPtr = 0;
+      }
+    }
+  } else if (mode == 7) { // clock
+    secDiv ++;
+    if (secDiv % ISRFREQ == 0) { // modulo math - causes next line to execute once a sec
+      m[1]->setTargetPos(COUNTSPERREVOLITION/60*secDiv/ISRFREQ); // snap to seconds
+    }
+    m[0]->setTargetPos(COUNTSPERREVOLITION/60*secDiv/ISRFREQ); // continuous
+  }
+}
+lv_obj_t * mbox1;
 
 void setup()
 {
@@ -212,15 +264,40 @@ void setup()
   lv_indev_drv_register(&indev_drv);
   numpadScr = buildNumpadScreen();
   buildConfigScreen();
+  hw_timer_t *timer = timerBegin(MOTCOUNT + 1, 80, true); // Begin timer with 1 MHz frequency (80MHz/80)
+  timerAttachInterrupt(timer, timerISR, true);
+  unsigned int timerFactor = 1000000 / ISRFREQ;
+  timerAlarmWrite(timer, timerFactor, true);
+  timerAlarmEnable(timer);
+
 }
 
+static void mb_event_cb(lv_event_t * e)
+{
+ 
+    if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
+        lv_msgbox_close(mbox1);
+     }
+
+}
 void loop()
 {
   lv_task_handler();
   for(int i = 0; i < MOTCOUNT; i++) {
+    if(m[i]->getStallFlg()) {
+      m[i]->setStallFlg(false);
+      lv_obj_clear_state(pwrsw[i], LV_STATE_CHECKED);
+      static const char * btns[] = { "Close", ""};
+      static char msg[25];
+      sprintf(msg,"Motor %d stalled",i + 1);
+
+      mbox1 = lv_msgbox_create(NULL, "", msg, btns, false);
+      lv_obj_add_event_cb(mbox1, mb_event_cb, LV_EVENT_ALL, NULL);
+      lv_obj_center(mbox1);
+    }
     if (m[i]->getRampRun())
     {
-      lv_slider_set_value(slider[i], m[i]->getRampRpm(), LV_ANIM_ON);
+      lv_slider_set_value(slider[i], m[i]->getRampRpm() * 10, LV_ANIM_ON);
     }
     if(showErr[i]) {
       lv_chart_set_next_value(pidchart[i], ser1[i], m[i]->getError() + 32);
@@ -268,9 +345,7 @@ void loop()
     
     }
 */
-
 }
-
 
 void rnd_event_cb(lv_event_t *e)
 {
@@ -282,7 +357,7 @@ void rnd_event_cb(lv_event_t *e)
     if(s->getRandomRun()) {
         s->stop();
       } else {  
-           s->startRandom();
+           s->startRandom(lv_slider_get_value(slider[lv_tabview_get_tab_act(tabView)]));
       }
   }
 }
@@ -297,7 +372,7 @@ void ramp_event_cb(lv_event_t *e)
     if(s->getRampRun()) {
         s->stop();
       } else {
-        s->startRamp(50);
+        s->startRamp(lv_slider_get_value(slider[lv_tabview_get_tab_act(tabView)]));
       }    
   }
 }
@@ -328,6 +403,7 @@ void slider_event_cb(lv_event_t *e)
   snprintf(buf, 4, "%u", m[i]->getTargetPos());
   lv_label_set_text(slider_label[i], buf);
 }
+
 void err_event_cb(lv_event_t *e)
 {
   lv_event_code_t code = lv_event_get_code(e);
@@ -355,6 +431,7 @@ void vel_event_cb(lv_event_t *e)
       }
   }
 }
+
 void sw_event_cb(lv_event_t *e)
 {
   lv_event_code_t code = lv_event_get_code(e);
@@ -366,6 +443,68 @@ void sw_event_cb(lv_event_t *e)
   }
 }
 
+void dd_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+
+  if (code == LV_EVENT_VALUE_CHANGED)
+  {
+    lv_obj_clear_state(runcb, LV_STATE_CHECKED);
+      mode = -1;
+      m[0]->enable(false);
+      m[1]->enable(false);
+  }
+}
+void run_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  lv_obj_t *obj = lv_event_get_target(e);
+  if (code == LV_EVENT_VALUE_CHANGED)
+  {
+    bool b = lv_obj_has_state(obj, LV_STATE_CHECKED);
+    char buf[32];
+    lv_dropdown_get_selected_str(dropdown, buf, sizeof(buf));
+    if (!b) {
+      mode = -1;
+      m[0]->enable(false);
+      m[1]->enable(false);
+    } else {
+      if(!strcmp(buf,"Random")) {
+       mode = 1;
+       m[0]->enable(true);
+       m[1]->enable(true);
+      } else if (!strcmp(buf,"M2 follow M1")) {
+       mode = 2;
+       m[0]->enable(false);
+       m[1]->enable(true);
+      } else if (!strcmp(buf,"M1 follow M2")) {
+       mode = 3;
+       m[0]->enable(true);
+       m[1]->enable(false);
+      } else if (!strcmp(buf,"M2 follow M1 REV")) {
+       mode = 4;
+       m[0]->enable(false);
+       m[1]->enable(true);
+      } else if (!strcmp(buf,"M1 follow M2 REV")) {
+       mode = 5;
+       m[0]->enable(true);
+       m[1]->enable(false);
+      } else if (!strcmp(buf,"Sequence")) {
+       mode = 6;
+       m[0]->enable(true);
+       m[1]->enable(true);
+       seqDly = SEQUENCEDELAY;
+       seqPtr = 0;
+      } else if (!strcmp(buf,"Clock")) {
+       mode = 7;
+       m[0]->enable(true);
+       m[1]->enable(true);
+       secDiv = 0;
+      }
+    }
+  }
+}
+
 void pid_event_cb(lv_event_t *e)
 {
   lv_obj_t *obj = lv_event_get_target(e);
@@ -374,29 +513,11 @@ void pid_event_cb(lv_event_t *e)
     openNumpad(obj);
   }
 }
-
-/*
- void slider_x_event_cb(lv_event_t * e)
-{
-    lv_obj_t * obj = lv_event_get_target(e);
-    int32_t v = lv_slider_get_value(obj);
-    lv_chart_set_zoom_x(chart, v);
-}
-
- void slider_y_event_cb(lv_event_t * e)
-{
-    lv_obj_t * obj = lv_event_get_target(e);
-    int32_t v = lv_slider_get_value(obj);
-    lv_chart_set_zoom_y(chart, v);
-}
-
-*/
 lv_obj_t *bloomButton(lv_obj_t *scr,
                       lv_coord_t x, lv_coord_t y,
                       lv_coord_t w, lv_coord_t h,
                       const char *lab, lv_event_cb_t cb)
 {
-
   lv_obj_t *btn1 = lv_btn_create(scr);
   lv_obj_add_style(btn1, &styleBloom, LV_STATE_PRESSED);
   lv_obj_set_pos(btn1, x, y);
@@ -407,8 +528,6 @@ lv_obj_t *bloomButton(lv_obj_t *scr,
   lv_obj_center(label);
   return btn1;
 }
-
-
 
 lv_obj_t *floatButton(lv_obj_t *scr, lv_coord_t x, lv_coord_t y, lv_coord_t w, lv_coord_t h, double *dval)
 {
@@ -424,6 +543,8 @@ lv_obj_t *floatButton(lv_obj_t *scr, lv_coord_t x, lv_coord_t y, lv_coord_t w, l
   label->user_data = dval;
   return btn;
 }
+
+
 
 void buildConfigScreen()
 {
@@ -445,17 +566,16 @@ void buildConfigScreen()
     ser1[i] = lv_chart_add_series(pidchart[i], lv_color_make(255, 0, 0), LV_CHART_AXIS_PRIMARY_Y);
     ser2[i] = lv_chart_add_series(pidchart[i], lv_color_make(0, 255, 0), LV_CHART_AXIS_PRIMARY_Y);
 
-    //bloomButton(scr, 0, 110, 45, 30, "Stop", stop_event_cb);
     floatButton(tab, 0, 110, 35, 30, &m[i]->kp);
     floatButton(tab, 40, 110, 35, 30, &m[i]->ki);
     floatButton(tab, 80, 110, 35, 30, &m[i]->kd);
     bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb);
     bloomButton(tab, 160, 110, 35, 30, "Rnd", rnd_event_cb);
 
-    lv_obj_t *sw = lv_switch_create(tab);
-    lv_obj_set_pos(sw, 200, 110);
-    lv_obj_set_size(sw, 50, 30);
-    lv_obj_add_event_cb(sw, sw_event_cb, LV_EVENT_ALL,NULL);
+    pwrsw[i] = lv_switch_create(tab);
+    lv_obj_set_pos(pwrsw[i], 200, 110);
+    lv_obj_set_size(pwrsw[i], 50, 30);
+    lv_obj_add_event_cb(pwrsw[i], sw_event_cb, LV_EVENT_ALL,NULL);
   
     slider[i] = lv_slider_create(tab);
     lv_obj_set_pos(slider[i], 20, 150);
@@ -489,8 +609,25 @@ void buildConfigScreen()
     lv_obj_set_pos(cb, 255, 125);
     lv_obj_set_size(cb, 40, 30);
     lv_obj_add_event_cb(cb, vel_event_cb, LV_EVENT_ALL,(void *)i);
-
   }
+    lv_obj_t * tabTest = lv_tabview_add_tab(tabView, "Both"); 
+    dropdown = lv_dropdown_create(tabTest);
+    lv_dropdown_set_options(dropdown, "Random\n"
+                            "M1 follow M2\n"
+                            "M2 follow M1\n"
+                            "M1 follow M2 REV\n"
+                            "M2 follow M1 REV\n"
+                            "Sequence\n"
+                            "Clock");
 
- 
+    lv_obj_set_pos(dropdown, 10, 0);
+    lv_obj_set_size(dropdown, 200, 40);
+    lv_obj_add_event_cb(dropdown, dd_event_cb, LV_EVENT_ALL, NULL);
+
+    runcb = lv_checkbox_create(tabTest);
+    lv_checkbox_set_text(runcb, "Run");
+
+    lv_obj_set_pos(runcb, 40, 60);
+    lv_obj_set_size(runcb, 200, 30);
+    lv_obj_add_event_cb(runcb, run_event_cb, LV_EVENT_ALL,NULL);
 }
