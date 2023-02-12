@@ -56,6 +56,7 @@ lv_obj_t *buildNumpadScreen();
 lv_obj_t *mainScr, *tabView, *dropdown, *runcb;
 int lstTab = -1;
 bool repeat = false;
+bool clrRunflg = false;
 extern void openNumpad(lv_obj_t *valPtr);
 void buildConfigScreen();
 lv_style_t styleBloom;
@@ -250,20 +251,19 @@ void IRAM_ATTR timerISR()
     m[0]->setTargetPos(COUNTSPERREVOLITION / 60 * secDiv / ISRFREQ); // continuous
   } 
   else if (mode == 8) {
-    learnAry[learnPtr++] = m[1]->getEncPos();
+    learnAry[learnPtr] = m[1]->getEncPos();
+    learnCnt = learnPtr++;
     if(learnPtr == MAXLEARN) {
-      learnCnt = MAXLEARN;
-      lv_obj_clear_state(runcb, LV_STATE_CHECKED);
       mode = -1;
+      clrRunflg = true;
     }
   }  
   else if (mode == 9) {
-
-    if(learnPtr == learnCnt) {
-      lv_obj_clear_state(runcb, LV_STATE_CHECKED);
+    if(learnPtr >= learnCnt) {
+      mode = -1;
+      clrRunflg = true;
       m[0]->enable(false);
       m[1]->enable(false);
-      mode = -1;
     } else {
         m[0]->setTargetPos(learnAry[learnPtr]);
         m[1]->setTargetPos(learnAry[learnPtr++]);
@@ -354,7 +354,11 @@ void loop()
     if (v < 0)
       v += COUNTSPERREVOLITION;
     lv_meter_set_indicator_end_value(meter[i], indic[i], v);
-
+    // this needs to happen outside ISR
+    if (clrRunflg) {
+      clrRunflg = false;
+      lv_obj_clear_state(runcb, LV_STATE_CHECKED);
+    }
     /*
     if(lv_scr_act() == mainScr ) {
       int ep1 = m[i]->getEncPos();
@@ -504,9 +508,6 @@ void run_event_cb(lv_event_t *e)
     lv_dropdown_get_selected_str(dropdown, buf, sizeof(buf));
     if (!b)
     {
-      if(mode==8) {
-        learnCnt = learnPtr;
-      }
       mode = -1;
       m[0]->enable(false);
       m[1]->enable(false);
@@ -515,61 +516,61 @@ void run_event_cb(lv_event_t *e)
     {
       if (!strcmp(buf, "Random"))
       {
-        mode = 1;
         m[0]->enable(true);
         m[1]->enable(true);
+        mode = 1;
       }
       else if (!strcmp(buf, "M2 follow M1"))
       {
-        mode = 2;
         m[0]->enable(false);
         m[1]->enable(true);
+        mode = 2;
       }
       else if (!strcmp(buf, "M1 follow M2"))
       {
-        mode = 3;
         m[0]->enable(true);
         m[1]->enable(false);
+        mode = 3;
       }
       else if (!strcmp(buf, "M2 follow M1 REV"))
       {
-        mode = 4;
         m[0]->enable(false);
         m[1]->enable(true);
+        mode = 4;
       }
       else if (!strcmp(buf, "M1 follow M2 REV"))
       {
-        mode = 5;
         m[0]->enable(true);
         m[1]->enable(false);
+        mode = 5;
       }
       else if (!strcmp(buf, "Sequence"))
       {
-        mode = 6;
         m[0]->enable(true);
         m[1]->enable(true);
         seqDly = SEQUENCEDELAY;
         seqPtr = 0;
+        mode = 6;
       }
       else if (!strcmp(buf, "Clock"))
       {
-        mode = 7;
         m[0]->enable(true);
         m[1]->enable(true);
         secDiv = 0;
+        mode = 7;
       } 
       else if (!strcmp(buf, "Learn M2"))
       {
-        mode = 8;
         m[1]->enable(false);
         learnPtr = 0;
+        mode = 8;
       } 
       else if (!strcmp(buf, "Play Both"))
       {
-        mode = 9;
+        learnPtr = 0;
         m[0]->enable(true);
         m[1]->enable(true);
-        learnPtr = 0;
+        mode = 9;
       }
     }
   }
