@@ -13,7 +13,8 @@
 #define RAMPSKIP 2
 #define RAMPPAUSE 100
 #define STALLMAX 1000
-#define STALLVAL 180
+#define STALLVAL 220
+#define COUNTSPERREVOLITION 445
 #define VELMIN 2
 
 /* this supports up to 4 servos*/
@@ -34,7 +35,9 @@ public:
 	void enable(bool flg);
 	void stop();
 	void startRandom(int);
+	void setRpm(int);
 	bool getRandomRun();
+	bool getRpmRun();
 	void startRamp(int);
 	bool getRampRun();
 	int getRampRpm();
@@ -69,14 +72,17 @@ private:
 	static void timerISR4();
 	int randLen;
 	const int freq = 5000;
+	int rpmCnt = 0;
 	const int resolution = 8;
 	int instNum;
 	long m1Now = 0, m1Lst = 0, m1Ctr = 0, m1Prev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
 	bool runFlg = false;
 	bool randRun = false;
+	bool rpmRun = false;
+	int rpmVal = 0;
 	int randDly = 0;
 	int randPos = 0;
-
+	int rpmOffset = 0;
 	int stallCnt = 0; // for detecting motor stall
 	bool stallFlg = false;
 	int rampCtr = 0;

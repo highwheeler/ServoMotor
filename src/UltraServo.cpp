@@ -131,6 +131,10 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
 
   if (inst->runFlg)
   {
+    if(inst->rpmRun) {
+      inst->rpmCnt++;
+      inst->targetPos = (COUNTSPERREVOLITION / 60 * inst->rpmVal* inst->rpmCnt / inst->sampleRate) + inst->rpmOffset;
+    }
     if(inst->randRun) {
       inst->randDly --;
       if (inst->randDly <= 0) {
@@ -237,8 +241,8 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
     if (abs(inst->pwm) > STALLVAL && abs(inst->velocity) < VELMIN) {
       inst->stallCnt++;
       if (inst->stallCnt> STALLMAX) {
-        inst->stallFlg = true;
-        inst->enable(false);
+    //    inst->stallFlg = true;
+     //   inst->enable(false);
       }
     }
     else
@@ -364,6 +368,24 @@ void UltraServo::startRandom(int l)
   randDly = 0;
   randRun = true;
 }
+void UltraServo::setRpm(int l) 
+{
+
+
+ // rpmCnt = (COUNTSPERREVOLITION / 60 * rpmVal / sampleRate)
+//  - (COUNTSPERREVOLITION / 60 * l  / sampleRate);
+if(l > 0 && rpmVal > 0) {
+rpmCnt = (targetPos * sampleRate) / (COUNTSPERREVOLITION * 60 * rpmVal)
+- (targetPos * sampleRate) / (COUNTSPERREVOLITION * 60 * l);
+}
+ // m1Ctr = 0;
+ // m1Lst = 0;
+ // m1Prev = 0;
+ // rpmCnt = 0;
+  rpmOffset = targetPos;
+  rpmVal = l;
+  rpmRun = true;
+}
 void UltraServo::startRamp(int len)
 {
   stop();
@@ -378,6 +400,10 @@ void UltraServo::startRamp(int len)
 bool UltraServo::getRampRun()
 {
   return rampRun;
+}
+bool UltraServo::getRpmRun()
+{
+  return rpmRun;
 }
 bool UltraServo::getRandomRun()
 {
@@ -406,6 +432,7 @@ void UltraServo::setTargetPos(int pos)
 void UltraServo::stop() {
     rampRun = false;
     randRun = false;
+    rpmRun = false;
 }
 void UltraServo::enable(bool flg)
 {
@@ -419,6 +446,8 @@ void UltraServo::enable(bool flg)
     randRun = false;
     m1Lst = 0;
     m1Now = 0;
+    rpmRun = false;
+    rpmCnt = 0;
   }
 }
 int UltraServo::getEncPos()

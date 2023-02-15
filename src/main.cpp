@@ -24,7 +24,6 @@
 #define SAMPLERATE 1500
 #define PWMBIAS 125
 #define MOTCOUNT 2
-#define COUNTSPERREVOLITION 445
 #define SEQUENCEDELAY 25
 #define ISRFREQ 500
 #define MAXLEARN 10000
@@ -404,6 +403,16 @@ void rnd_event_cb(lv_event_t *e)
   if (code == LV_EVENT_CLICKED)
   {
     UltraServo *s = m[lv_tabview_get_tab_act(tabView)];
+
+    if (s->getRpmRun())
+    {
+      s->stop();
+    }
+    else
+    {
+      s->setRpm(lv_slider_get_value(slider[lv_tabview_get_tab_act(tabView)]));
+    }
+    /*
     if (s->getRandomRun())
     {
       s->stop();
@@ -412,6 +421,7 @@ void rnd_event_cb(lv_event_t *e)
     {
       s->startRandom(lv_slider_get_value(slider[lv_tabview_get_tab_act(tabView)]));
     }
+    */
   }
 }
 
@@ -437,10 +447,14 @@ void slider_event_cb(lv_event_t *e)
 {
   lv_obj_t *slider = lv_event_get_target(e);
   int i = lv_tabview_get_tab_act(tabView);
-  m[i]->setTargetPos(lv_slider_get_value(slider));
-
+  int s = lv_slider_get_value(slider);
+  if(m[i]->getRpmRun()) {
+    m[i]->setRpm(s);
+  } else {
+    m[i]->setTargetPos(s);
+  }
   char buf[8];
-  snprintf(buf, 4, "%u", m[i]->getTargetPos());
+  snprintf(buf, 4, "%u", lv_slider_get_value(slider));
   lv_label_set_text(slider_label[i], buf);
 }
 
@@ -640,7 +654,7 @@ void buildConfigScreen()
     floatButton(tab, 40, 110, 35, 30, &m[i]->ki);
     floatButton(tab, 80, 110, 35, 30, &m[i]->kd);
     bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb);
-    bloomButton(tab, 160, 110, 35, 30, "Rnd", rnd_event_cb);
+    bloomButton(tab, 160, 110, 35, 30, "Rpm", rnd_event_cb);
 
     pwrsw[i] = lv_switch_create(tab);
     lv_obj_set_pos(pwrsw[i], 200, 110);
