@@ -16,6 +16,7 @@ UltraServo::UltraServo(int _enc1pin, int _enc2pin, int _pwmPin, int _dir1pin,
   pinMode(_enc2pin, INPUT);
   pinMode(_dir1pin, OUTPUT);
   pinMode(_dir2pin, OUTPUT);
+  pinMode(OUTPULSE, OUTPUT);
   digitalWrite(_dir1pin, false);
   digitalWrite(_dir2pin, true);
   timer = timerBegin(numInst, 80, true); // Begin timer with 1 MHz frequency (80MHz/80)
@@ -122,7 +123,7 @@ void IRAM_ATTR UltraServo::__digitalWrite(uint8_t pin, uint8_t val)
 void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
 {
   //  portENTER_CRITICAL(&myMutex);
-  // digitalWrite(OUTPULSE, LOW);
+  //  if(inst->instNum == 0) __digitalWrite(OUTPULSE, LOW);
 
   inst->tmpRpm = inst->m1Ctr;
   inst->error = inst->targetPos - inst->m1Ctr;
@@ -131,13 +132,22 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
 
   if (inst->runFlg)
   {
-    if(inst->rpmRun) {
+    if (inst->rpmRun)
+    {
       inst->rpmCnt++;
-      inst->targetPos = (COUNTSPERREVOLITION / 60 * inst->rpmVal* inst->rpmCnt / inst->sampleRate) + inst->rpmOffset;
+      if (inst->rpmCnt > COUNTSPERREVOLUTION * 10)
+      {
+        inst->rpmCnt = 0;
+        inst->rpmOffset = inst->targetPos;
+      }
+
+      inst->targetPos = (COUNTSPERREVOLUTION * inst->rpmVal * inst->rpmCnt / (inst->sampleRate * 60)) + inst->rpmOffset;
     }
-    if(inst->randRun) {
-      inst->randDly --;
-      if (inst->randDly <= 0) {
+    if (inst->randRun)
+    {
+      inst->randDly--;
+      if (inst->randDly <= 0)
+      {
         inst->randDly = RAMPPAUSE * 1;
         inst->targetPos = random(inst->randLen);
       }
@@ -238,16 +248,18 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
     {
       inst->pwm = -MAXERR;
     }
-    if (abs(inst->pwm) > STALLVAL && abs(inst->velocity) < VELMIN) {
+    if (abs(inst->pwm) > STALLVAL && abs(inst->velocity) < VELMIN)
+    {
       inst->stallCnt++;
-      if (inst->stallCnt> STALLMAX) {
-    //    inst->stallFlg = true;
-     //   inst->enable(false);
+      if (inst->stallCnt > STALLMAX)
+      {
+        //    inst->stallFlg = true;
+        //   inst->enable(false);
       }
     }
     else
     {
-      inst->stallCnt=0;
+      inst->stallCnt = 0;
     }
   }
   else
@@ -273,7 +285,7 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
     __digitalWrite(inst->dir2pin, true);
     myledcWrite(inst->instNum, inst->pwm);
   }
-  //  digitalWrite(OUTPULSE, HIGH);
+  // if(inst->instNum == 0) __digitalWrite(OUTPULSE, HIGH);
   //  portEXIT_CRITICAL_ISR(&myMutex);
 }
 
@@ -343,6 +355,10 @@ void IRAM_ATTR UltraServo::encoderISR(UltraServo *inst)
       inst->cntFlt++;
   }
   inst->m1Lst = m1Now;
+  //  if(inst->instNum == 0 && inst->m1Ctr % COUNTSPERREVOLUTION ==0 ) {
+  //    __digitalWrite(OUTPULSE, LOW);
+  //    __digitalWrite(OUTPULSE, HIGH);
+  //    }
 }
 
 void IRAM_ATTR UltraServo::encoderISR1()
@@ -361,27 +377,21 @@ void IRAM_ATTR UltraServo::encoderISR4()
 {
   encoderISR(instance[3]);
 }
-void UltraServo::startRandom(int l) 
+void UltraServo::startRandom(int l)
 {
   stop();
   randLen = l;
   randDly = 0;
   randRun = true;
 }
-void UltraServo::setRpm(int l) 
+void UltraServo::setRpm(int l)
 {
 
+  if (l > 0 && rpmVal > 0)
+  {
+    rpmCnt = (targetPos * sampleRate) / (COUNTSPERREVOLUTION * 60 * rpmVal) - (targetPos * sampleRate) / (COUNTSPERREVOLUTION * 60 * l);
+  }
 
- // rpmCnt = (COUNTSPERREVOLITION / 60 * rpmVal / sampleRate)
-//  - (COUNTSPERREVOLITION / 60 * l  / sampleRate);
-if(l > 0 && rpmVal > 0) {
-rpmCnt = (targetPos * sampleRate) / (COUNTSPERREVOLITION * 60 * rpmVal)
-- (targetPos * sampleRate) / (COUNTSPERREVOLITION * 60 * l);
-}
- // m1Ctr = 0;
- // m1Lst = 0;
- // m1Prev = 0;
- // rpmCnt = 0;
   rpmOffset = targetPos;
   rpmVal = l;
   rpmRun = true;
@@ -429,14 +439,15 @@ void UltraServo::setTargetPos(int pos)
 {
   targetPos = pos;
 }
-void UltraServo::stop() {
-    rampRun = false;
-    randRun = false;
-    rpmRun = false;
+void UltraServo::stop()
+{
+  rampRun = false;
+  randRun = false;
+  rpmRun = false;
 }
 void UltraServo::enable(bool flg)
 {
-  runFlg = flg; 
+  runFlg = flg;
   m1Ctr = 0;
   m1Prev = 0;
   if (!flg)
@@ -455,10 +466,12 @@ int UltraServo::getEncPos()
   return m1Ctr;
 }
 
-bool UltraServo::getStallFlg() {
+bool UltraServo::getStallFlg()
+{
   return stallFlg;
 }
 
-void UltraServo::setStallFlg(bool val) {
- stallFlg = val;
+void UltraServo::setStallFlg(bool val)
+{
+  stallFlg = val;
 }
