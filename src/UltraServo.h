@@ -14,8 +14,9 @@
 #define RAMPPAUSE 100
 #define STALLMAX 1000
 #define STALLVAL 220
-#define COUNTSPERREVOLITION 445
+#define COUNTSPERREVOLUTION 445
 #define VELMIN 2
+#define OUTPULSE 32
 
 /* this supports up to 4 servos*/
 
@@ -51,6 +52,9 @@ public:
 	double kp = 8;
 	double ki = 0;
 	double kd = 350;
+		short int rpmCnt = 0;
+			short int m1Now = 0, m1Lst = 0, m1Ctr = 0, m1Prev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
+
 private:
 	static void myledcWrite(uint8_t chan, uint32_t duty);
 	static void __digitalWrite(uint8_t pin, uint8_t val);
@@ -72,10 +76,9 @@ private:
 	static void timerISR4();
 	int randLen;
 	const int freq = 5000;
-	int rpmCnt = 0;
+
 	const int resolution = 8;
 	int instNum;
-	long m1Now = 0, m1Lst = 0, m1Ctr = 0, m1Prev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
 	bool runFlg = false;
 	bool randRun = false;
 	bool rpmRun = false;

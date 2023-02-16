@@ -245,27 +245,33 @@ void IRAM_ATTR timerISR()
     secDiv++;
     if (secDiv % ISRFREQ == 0)
     {                                                                  // modulo math - causes next line to execute once a sec
-      m[1]->setTargetPos(COUNTSPERREVOLITION / 60 * secDiv / ISRFREQ); // snap to seconds
+      m[1]->setTargetPos(COUNTSPERREVOLUTION / 60 * secDiv / ISRFREQ); // snap to seconds
     }
-    m[0]->setTargetPos(COUNTSPERREVOLITION / 60 * secDiv / ISRFREQ); // continuous
-  } 
-  else if (mode == 8) {
+    m[0]->setTargetPos(COUNTSPERREVOLUTION / 60 * secDiv / ISRFREQ); // continuous
+  }
+  else if (mode == 8)
+  {
     learnAry[learnPtr] = m[1]->getEncPos();
     learnCnt = learnPtr++;
-    if(learnPtr == MAXLEARN) {
+    if (learnPtr == MAXLEARN)
+    {
       mode = -1;
       clrRunflg = true;
     }
-  }  
-  else if (mode == 9) {
-    if(learnPtr >= learnCnt) {
+  }
+  else if (mode == 9)
+  {
+    if (learnPtr >= learnCnt)
+    {
       mode = -1;
       clrRunflg = true;
       m[0]->enable(false);
       m[1]->enable(false);
-    } else {
-        m[0]->setTargetPos(learnAry[learnPtr]);
-        m[1]->setTargetPos(learnAry[learnPtr++]);
+    }
+    else
+    {
+      m[0]->setTargetPos(learnAry[learnPtr]);
+      m[1]->setTargetPos(learnAry[learnPtr++]);
     }
   }
 }
@@ -349,15 +355,18 @@ void loop()
     {
       lv_chart_set_next_value(pidchart[i], ser2[i], m[i]->getVelocity() + 32);
     }
-    int v = m[i]->getEncPos() % COUNTSPERREVOLITION;
+    int v = m[i]->getEncPos() % COUNTSPERREVOLUTION;
     if (v < 0)
-      v += COUNTSPERREVOLITION;
+      v += COUNTSPERREVOLUTION;
     lv_meter_set_indicator_end_value(meter[i], indic[i], v);
     // this needs to happen outside ISR
-    if (clrRunflg) {
+    if (clrRunflg)
+    {
       clrRunflg = false;
       lv_obj_clear_state(runcb, LV_STATE_CHECKED);
     }
+    //Serial.println(m[0]->rpmCnt);
+    // Serial.println(m[0]->targetPos);
     /*
     if(lv_scr_act() == mainScr ) {
       int ep1 = m[i]->getEncPos();
@@ -445,17 +454,44 @@ void ramp_event_cb(lv_event_t *e)
 
 void slider_event_cb(lv_event_t *e)
 {
-  lv_obj_t *slider = lv_event_get_target(e);
   int i = lv_tabview_get_tab_act(tabView);
-  int s = lv_slider_get_value(slider);
-  if(m[i]->getRpmRun()) {
+  lv_obj_t *sl = slider[i];
+  int s = lv_slider_get_value(sl);
+  if (m[i]->getRpmRun())
+  {
     m[i]->setRpm(s);
-  } else {
+  }
+  else
+  {
     m[i]->setTargetPos(s);
   }
   char buf[8];
-  snprintf(buf, 4, "%u", lv_slider_get_value(slider));
+  snprintf(buf, 4, "%u", lv_slider_get_value(sl));
   lv_label_set_text(slider_label[i], buf);
+}
+
+void up_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_CLICKED)
+  {
+    lv_obj_t* sl = slider[lv_tabview_get_tab_act(tabView)];
+    int s = lv_slider_get_value(sl);
+    lv_slider_set_value(sl, s + 1, LV_ANIM_ON);
+  
+    slider_event_cb(NULL);
+  }
+}
+void dn_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_CLICKED)
+  {
+     lv_obj_t* sl = slider[lv_tabview_get_tab_act(tabView)];
+    int s = lv_slider_get_value(sl);
+    lv_slider_set_value(sl, s - 1, LV_ANIM_ON);
+        slider_event_cb(NULL);
+  }
 }
 
 void err_event_cb(lv_event_t *e)
@@ -572,13 +608,13 @@ void run_event_cb(lv_event_t *e)
         m[1]->enable(true);
         secDiv = 0;
         mode = 7;
-      } 
+      }
       else if (!strcmp(buf, "Learn M2"))
       {
         m[1]->enable(false);
         learnPtr = 0;
         mode = 8;
-      } 
+      }
       else if (!strcmp(buf, "Play Both"))
       {
         learnPtr = 0;
@@ -662,10 +698,10 @@ void buildConfigScreen()
     lv_obj_add_event_cb(pwrsw[i], sw_event_cb, LV_EVENT_ALL, NULL);
 
     slider[i] = lv_slider_create(tab);
-    lv_obj_set_pos(slider[i], 20, 150);
-    lv_obj_set_size(slider[i], 270, 30);
+    lv_obj_set_pos(slider[i], 40, 150);
+    lv_obj_set_size(slider[i], 250, 30);
     lv_obj_add_event_cb(slider[i], slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_slider_set_range(slider[i], 0, COUNTSPERREVOLITION + 1); // one full revolution
+    lv_slider_set_range(slider[i], 0, COUNTSPERREVOLUTION + 1); // one full revolution
 
     slider_label[i] = lv_label_create(tab);
     lv_label_set_text(slider_label[i], "0%");
@@ -676,7 +712,7 @@ void buildConfigScreen()
     lv_obj_set_pos(meter[i], -10, 10);
     lv_meter_scale_t *scale = lv_meter_add_scale(meter[i]);
     lv_meter_set_scale_ticks(meter[i], scale, 0, 0, 0, lv_palette_main(LV_PALETTE_GREY));
-    lv_meter_set_scale_range(meter[i], scale, 0, COUNTSPERREVOLITION, 360, 0);
+    lv_meter_set_scale_range(meter[i], scale, 0, COUNTSPERREVOLUTION, 360, 0);
     indic[i] = lv_meter_add_needle_line(meter[i], scale, 3, lv_palette_main(LV_PALETTE_GREY), 15);
     lv_obj_clear_flag(tab, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -693,6 +729,9 @@ void buildConfigScreen()
     lv_obj_set_pos(cb, 255, 125);
     lv_obj_set_size(cb, 40, 30);
     lv_obj_add_event_cb(cb, vel_event_cb, LV_EVENT_ALL, (void *)i);
+
+    bloomButton(tab, 0, 145, 30, 20, "^", up_event_cb);
+    bloomButton(tab, 0, 165, 30, 20, "V", dn_event_cb);
   }
   lv_obj_t *tabTest = lv_tabview_add_tab(tabView, "Both");
   dropdown = lv_dropdown_create(tabTest);
