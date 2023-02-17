@@ -7,6 +7,8 @@
 
 #define CALIBRATION_FILE "/TouchCalData"
 #define SETTINGS_FILE "/SettingsData"
+#define LEARN_FILE "/LearnData"
+#define PID_FILE "/PidData"
 #define REPEAT_CAL false
 #define LVGL_TICK_PERIOD 20
 #define HOR_RES 320
@@ -36,6 +38,8 @@ int seqDly = 0;
 bool seqRun = false;
 int learnPtr, learnCnt = 0;
 int learnAry[MAXLEARN];
+bool writeLearn = false;
+bool writePid = false;
 Ticker tick;
 TFT_eSPI tft = TFT_eSPI();
 lv_disp_draw_buf_t disp_buf;
@@ -257,6 +261,7 @@ void IRAM_ATTR timerISR()
     {
       mode = -1;
       clrRunflg = true;
+      writeLearn = true;
     }
   }
   else if (mode == 9)
@@ -309,6 +314,26 @@ void setup()
   indev_drv.type = LV_INDEV_TYPE_POINTER;
   indev_drv.read_cb = my_touchpad_read;
   lv_indev_drv_register(&indev_drv);
+
+  File f = SPIFFS.open(LEARN_FILE, "r");
+  if (f)
+  {
+    f.readBytes((char *)&learnCnt, sizeof(int));
+    f.readBytes((char *)&learnAry, sizeof(int) * learnCnt);
+    f.close();
+  }
+  File fp = SPIFFS.open(PID_FILE, "r");
+  if (fp)
+  {
+    fp.readBytes((char *)&m[0]->kp, sizeof(double));
+    fp.readBytes((char *)&m[0]->ki, sizeof(double));
+    fp.readBytes((char *)&m[0]->kd, sizeof(double));
+    fp.readBytes((char *)&m[1]->kp, sizeof(double));
+    fp.readBytes((char *)&m[1]->ki, sizeof(double));
+    fp.readBytes((char *)&m[1]->kd, sizeof(double));
+    fp.close();
+  }
+
   numpadScr = buildNumpadScreen();
   buildConfigScreen();
   hw_timer_t *timer = timerBegin(MOTCOUNT + 1, 80, true); // Begin timer with 1 MHz frequency (80MHz/80)
@@ -365,7 +390,33 @@ void loop()
       clrRunflg = false;
       lv_obj_clear_state(runcb, LV_STATE_CHECKED);
     }
-    //Serial.println(m[0]->rpmCnt);
+    if (writeLearn)
+    {
+      writeLearn = false;
+      File f = SPIFFS.open(LEARN_FILE, "w");
+      if (f)
+      {
+        f.write((const unsigned char *)&learnCnt, sizeof(int));
+        f.write((const unsigned char *)&learnAry, sizeof(int) * learnCnt);
+        f.close();
+      }
+    }
+    if (writePid)
+    {
+      writePid = false;
+      File fp = SPIFFS.open(PID_FILE, "w");
+      if (fp)
+      {
+        fp.write((const unsigned char *)&(m[0]->kp), sizeof(double));
+        fp.write((const unsigned char *)&m[0]->ki, sizeof(double));
+        fp.write((const unsigned char *)&m[0]->kd, sizeof(double));
+        fp.write((const unsigned char *)&m[1]->kp, sizeof(double));
+        fp.write((const unsigned char *)&m[1]->ki, sizeof(double));
+        fp.write((const unsigned char *)&m[1]->kd, sizeof(double));
+        fp.close();
+      }
+    }
+    // Serial.println(m[0]->rpmCnt);
     // Serial.println(m[0]->targetPos);
     /*
     if(lv_scr_act() == mainScr ) {
@@ -475,10 +526,10 @@ void up_event_cb(lv_event_t *e)
   lv_event_code_t code = lv_event_get_code(e);
   if (code == LV_EVENT_CLICKED)
   {
-    lv_obj_t* sl = slider[lv_tabview_get_tab_act(tabView)];
+    lv_obj_t *sl = slider[lv_tabview_get_tab_act(tabView)];
     int s = lv_slider_get_value(sl);
     lv_slider_set_value(sl, s + 1, LV_ANIM_ON);
-  
+
     slider_event_cb(NULL);
   }
 }
@@ -487,10 +538,10 @@ void dn_event_cb(lv_event_t *e)
   lv_event_code_t code = lv_event_get_code(e);
   if (code == LV_EVENT_CLICKED)
   {
-     lv_obj_t* sl = slider[lv_tabview_get_tab_act(tabView)];
+    lv_obj_t *sl = slider[lv_tabview_get_tab_act(tabView)];
     int s = lv_slider_get_value(sl);
     lv_slider_set_value(sl, s - 1, LV_ANIM_ON);
-        slider_event_cb(NULL);
+    slider_event_cb(NULL);
   }
 }
 
@@ -558,6 +609,10 @@ void run_event_cb(lv_event_t *e)
     lv_dropdown_get_selected_str(dropdown, buf, sizeof(buf));
     if (!b)
     {
+      if (mode == 8)
+      {
+        writeLearn = true;
+      }
       mode = -1;
       m[0]->enable(false);
       m[1]->enable(false);

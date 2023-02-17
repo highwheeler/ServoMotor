@@ -4,6 +4,7 @@
 #define VER_RES 240
 lv_style_t style_bg;
 extern lv_obj_t *numpadScr;
+extern bool writePid;
 const char *btnm_map[] = {"1", "2", "3", "\n",
                           "4", "5", "6", "\n",
                           "7", "8", "9", "\n",
@@ -39,14 +40,15 @@ void btnm_event_cb(lv_event_t *e)
   }
   else if (strcmp(txt, LV_SYMBOL_OK) == 0)
   {
-    //    lv_event_send(ta, LV_EVENT_READY, NULL);
+
     const char *res = lv_textarea_get_text(txtarea);
     sscanf(res, "%f", &fv);
-
     lv_obj_t *lab = (lv_obj_t *)targVal->user_data;
     lv_label_set_text(lab, res);
     double *dval = (double *)lab->user_data;
     *dval = fv;
+    writePid = true;
+    
     lv_scr_load(lastScr);
   }
   else

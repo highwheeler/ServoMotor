@@ -125,10 +125,10 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
   //  portENTER_CRITICAL(&myMutex);
   //  if(inst->instNum == 0) __digitalWrite(OUTPULSE, LOW);
 
-  inst->tmpRpm = inst->m1Ctr;
-  inst->error = inst->targetPos - inst->m1Ctr;
-  inst->velocity = inst->m1Ctr - inst->m1Prev;
-  inst->m1Prev = inst->m1Ctr;
+  inst->tmpRpm = inst->encCtr;
+  inst->error = inst->targetPos - inst->encCtr;
+  inst->velocity = inst->encCtr - inst->encPrev;
+  inst->encPrev = inst->encCtr;
 
   if (inst->runFlg)
   {
@@ -313,48 +313,48 @@ void IRAM_ATTR UltraServo::encoderISR(UltraServo *inst)
   // digitalWrite(OUTPULSE, LOW);
   // read the direct gpio ports masked with the calculated bitmask
 
-  int m1Now =
+  int encNow =
       (((*(volatile uint32_t *)inst->enc1port) & inst->enc1mask) ? 1 : 0) |
       (((*(volatile uint32_t *)inst->enc2port) & inst->enc2mask) ? 2 : 0);
 
   // if / then implementation of a "state machine"
-  if (inst->m1Lst == 0)
+  if (inst->encLst == 0)
   {
-    if (m1Now == 2)
-      inst->m1Ctr++;
-    else if (m1Now == 1)
-      inst->m1Ctr--;
+    if (encNow == 2)
+      inst->encCtr++;
+    else if (encNow == 1)
+      inst->encCtr--;
     else
       inst->cntFlt++;
   }
-  else if (inst->m1Lst == 2)
+  else if (inst->encLst == 2)
   {
-    if (m1Now == 3)
-      inst->m1Ctr++;
-    else if (m1Now == 0)
-      inst->m1Ctr--;
+    if (encNow == 3)
+      inst->encCtr++;
+    else if (encNow == 0)
+      inst->encCtr--;
     else
       inst->cntFlt++;
   }
-  else if (inst->m1Lst == 3)
+  else if (inst->encLst == 3)
   {
-    if (m1Now == 1)
-      inst->m1Ctr++;
-    else if (m1Now == 2)
-      inst->m1Ctr--;
+    if (encNow == 1)
+      inst->encCtr++;
+    else if (encNow == 2)
+      inst->encCtr--;
     else
       inst->cntFlt++;
   }
-  else if (inst->m1Lst == 1)
+  else if (inst->encLst == 1)
   {
-    if (m1Now == 0)
-      inst->m1Ctr++;
-    else if (m1Now == 3)
-      inst->m1Ctr--;
+    if (encNow == 0)
+      inst->encCtr++;
+    else if (encNow == 3)
+      inst->encCtr--;
     else
       inst->cntFlt++;
   }
-  inst->m1Lst = m1Now;
+  inst->encLst = encNow;
   //  if(inst->instNum == 0 && inst->m1Ctr % COUNTSPERREVOLUTION ==0 ) {
   //    __digitalWrite(OUTPULSE, LOW);
   //    __digitalWrite(OUTPULSE, HIGH);
@@ -386,12 +386,12 @@ void UltraServo::startRandom(int l)
 }
 void UltraServo::setRpm(int l)
 {
-
   if (l > 0 && rpmVal > 0)
   {
     rpmCnt = (targetPos * sampleRate) / (COUNTSPERREVOLUTION * 60 * rpmVal) - (targetPos * sampleRate) / (COUNTSPERREVOLUTION * 60 * l);
+  } else {
+    rpmCnt = 0;
   }
-
   rpmOffset = targetPos;
   rpmVal = l;
   rpmRun = true;
@@ -448,22 +448,21 @@ void UltraServo::stop()
 void UltraServo::enable(bool flg)
 {
   runFlg = flg;
-  m1Ctr = 0;
-  m1Prev = 0;
+  encCtr = 0;
+  encPrev = 0;
   if (!flg)
   {
     targetPos = 0;
     rampRun = false;
     randRun = false;
-    m1Lst = 0;
-    m1Now = 0;
+    encLst = 0;
     rpmRun = false;
     rpmCnt = 0;
   }
 }
 int UltraServo::getEncPos()
 {
-  return m1Ctr;
+  return encCtr;
 }
 
 bool UltraServo::getStallFlg()

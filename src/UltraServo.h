@@ -23,15 +23,15 @@
 class UltraServo
 {
 public:
-  /**
- * @param enc1pin : quadrature encoder pin 1
- * @param enc2pin : quadrature encoder pin 2
- * @param pwmPin : PWM output pin
- * @param dir1pin : H bridge direction pin 1
- * @param dir2pin : H bridge direction pin 2
- * @param sampleRate : timer sample rate in HZ
- * @param bias : minimum PWM value to get motor moving
- */
+	/**
+	 * @param enc1pin : quadrature encoder pin 1
+	 * @param enc2pin : quadrature encoder pin 2
+	 * @param pwmPin : PWM output pin
+	 * @param dir1pin : H bridge direction pin 1
+	 * @param dir2pin : H bridge direction pin 2
+	 * @param sampleRate : timer sample rate in HZ
+	 * @param bias : minimum PWM value to get motor moving
+	 */
 	UltraServo(int enc1pin, int enc2pin, int pwmPin, int dir1pin, int dir2pin, int sampleRate, int bias);
 	void enable(bool flg);
 	void stop();
@@ -49,17 +49,15 @@ public:
 	int getEncPos();
 	bool getStallFlg();
 	void setStallFlg(bool);
-	double kp = 8;
+	double kp = 15;
 	double ki = 0;
 	double kd = 350;
-		short int rpmCnt = 0;
-			short int m1Now = 0, m1Lst = 0, m1Ctr = 0, m1Prev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
 
 private:
 	static void myledcWrite(uint8_t chan, uint32_t duty);
 	static void __digitalWrite(uint8_t pin, uint8_t val);
 	static void *timerIsr[4];
-    static void *encIsr[4];
+	static void *encIsr[4];
 	static UltraServo *instance[4];
 	static int numInst;
 	hw_timer_t *timer;
@@ -76,7 +74,8 @@ private:
 	static void timerISR4();
 	int randLen;
 	const int freq = 5000;
-
+	short int rpmCnt = 0;
+	short int encLst = 0, encCtr = 0, encPrev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
 	const int resolution = 8;
 	int instNum;
 	bool runFlg = false;
