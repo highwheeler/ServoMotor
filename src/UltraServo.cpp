@@ -248,19 +248,21 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
     {
       inst->pwm = -MAXERR;
     }
-    if (abs(inst->pwm) > STALLVAL && abs(inst->velocity) < VELMIN)
+    if (abs(inst->pwm) > STALLVAL && abs(inst->velocity) < VELMIN
+    && abs(inst->pwm - inst->lstPwm) < 50 )
     {
       inst->stallCnt++;
       if (inst->stallCnt > STALLMAX)
       {
-        //    inst->stallFlg = true;
-        //   inst->enable(false);
+        inst->stallFlg = true;
+         inst->enable(false);
       }
     }
     else
     {
       inst->stallCnt = 0;
     }
+    inst->lstPwm = inst->pwm;
   }
   else
   {

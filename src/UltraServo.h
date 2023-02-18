@@ -13,7 +13,7 @@
 #define RAMPSKIP 2
 #define RAMPPAUSE 100
 #define STALLMAX 1000
-#define STALLVAL 220
+#define STALLVAL 214
 #define COUNTSPERREVOLUTION 445
 #define VELMIN 2
 #define OUTPULSE 32
@@ -52,7 +52,7 @@ public:
 	double kp = 15;
 	double ki = 0;
 	double kd = 350;
-
+	int pwm = 0, lstPwm = 0;
 private:
 	static void myledcWrite(uint8_t chan, uint32_t duty);
 	static void __digitalWrite(uint8_t pin, uint8_t val);
@@ -97,7 +97,7 @@ private:
 	bool rampRun = false;
 	volatile int rampSkip = 0;
 	volatile int velocity;
-	int pwm = 0;
+
 	unsigned int enc1mask, enc2mask;
 	int enc1port, enc2port;
 };

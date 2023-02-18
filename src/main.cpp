@@ -416,7 +416,7 @@ void loop()
         fp.close();
       }
     }
-    // Serial.println(m[0]->rpmCnt);
+    Serial.println(m[0]->pwm);
     // Serial.println(m[0]->targetPos);
     /*
     if(lv_scr_act() == mainScr ) {
@@ -744,8 +744,8 @@ void buildConfigScreen()
     floatButton(tab, 0, 110, 35, 30, &m[i]->kp);
     floatButton(tab, 40, 110, 35, 30, &m[i]->ki);
     floatButton(tab, 80, 110, 35, 30, &m[i]->kd);
-    bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb);
-    bloomButton(tab, 160, 110, 35, 30, "Rpm", rnd_event_cb);
+    lv_obj_add_flag(bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb),LV_OBJ_FLAG_CHECKABLE);
+    lv_obj_add_flag(bloomButton(tab, 160, 110, 35, 30, "Rpm", rnd_event_cb),LV_OBJ_FLAG_CHECKABLE);
 
     pwrsw[i] = lv_switch_create(tab);
     lv_obj_set_pos(pwrsw[i], 200, 110);
