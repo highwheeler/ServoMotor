@@ -269,6 +269,7 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
 
     inst->sumError = 0;
     inst->pwm = 0;
+    inst->stallCnt = 0;
     //   for (int i = 0; i < NUMHIST; i++)
     //   {
     //     errHist[i] = 0;
@@ -388,6 +389,8 @@ void UltraServo::startRandom(int l)
 }
 void UltraServo::setRpm(int l)
 {
+  rpmRun = true;
+  if(l == rpmVal) return;
   if (l > 0 && rpmVal > 0)
   {
     rpmCnt = (targetPos * sampleRate) / (COUNTSPERREVOLUTION * 60 * rpmVal) - (targetPos * sampleRate) / (COUNTSPERREVOLUTION * 60 * l);
@@ -396,8 +399,8 @@ void UltraServo::setRpm(int l)
   }
   rpmOffset = targetPos;
   rpmVal = l;
-  rpmRun = true;
 }
+
 void UltraServo::startRamp(int len)
 {
   stop();
@@ -446,6 +449,8 @@ void UltraServo::stop()
   rampRun = false;
   randRun = false;
   rpmRun = false;
+  //rpmVal = 0;
+
 }
 void UltraServo::enable(bool flg)
 {

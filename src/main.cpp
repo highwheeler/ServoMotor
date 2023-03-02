@@ -15,13 +15,13 @@
 #define VER_RES 240
 #define M1ENCP1 21
 #define M1ENCP2 22
-#define M1PIND1 16
-#define M1PIND2 17
+#define M1PIND1 17
+#define M1PIND2 16
 #define PWM1PIN 2
 #define M2ENCP1 39
 #define M2ENCP2 34
-#define M2PIND1 14
-#define M2PIND2 12
+#define M2PIND1 12
+#define M2PIND2 14
 #define PWM2PIN 26
 #define SAMPLERATE 1500
 #define PWMBIAS 125
@@ -40,6 +40,7 @@ int learnPtr, learnCnt = 0;
 int learnAry[MAXLEARN];
 bool writeLearn = false;
 bool writePid = false;
+double m0psav, m0dsav, m1psav, m1dsav;
 Ticker tick;
 TFT_eSPI tft = TFT_eSPI();
 lv_disp_draw_buf_t disp_buf;
@@ -278,9 +279,15 @@ void IRAM_ATTR timerISR()
       m[0]->setTargetPos(learnAry[learnPtr]);
       m[1]->setTargetPos(learnAry[learnPtr++]);
     }
+  } 
+  else if (mode == 10) { // haptic
+      m[0]->setTargetPos(m[1]->getEncPos());
+      m[1]->setTargetPos(m[0]->getEncPos());
+  }
+  else if (mode == 11) { // Speed Ctrl
+      m[0]->setRpm(m[1]->getEncPos());
   }
 }
-lv_obj_t *mbox1;
 
 void setup()
 {
@@ -298,7 +305,12 @@ void setup()
   // check file system exists
   if (!SPIFFS.begin())
   {
-    Serial.println("Formating file system");
+    tft.fillScreen(TFT_BLACK);
+    tft.setCursor(40, 80);
+    tft.setTextFont(2);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.println("Formatting file system - please wait...");
     SPIFFS.format();
     SPIFFS.begin();
   }
@@ -345,10 +357,9 @@ void setup()
 
 static void mb_event_cb(lv_event_t *e)
 {
-
   if (lv_event_get_code(e) == LV_EVENT_PRESSED)
   {
-    lv_msgbox_close(mbox1);
+    lv_msgbox_close(lv_obj_get_parent( lv_event_get_target(e)));
   }
 }
 void loop()
@@ -363,14 +374,13 @@ void loop()
       static const char *btns[] = {"Close", ""};
       static char msg[25];
       sprintf(msg, "Motor %d stalled", i + 1);
-
-      mbox1 = lv_msgbox_create(NULL, "", msg, btns, false);
-      lv_obj_add_event_cb(mbox1, mb_event_cb, LV_EVENT_ALL, NULL);
-      lv_obj_center(mbox1);
+      lv_obj_t *mbox = lv_msgbox_create(NULL, "Fault Detected", msg, btns, false);
+      lv_obj_add_event_cb(mbox, mb_event_cb, LV_EVENT_ALL, NULL);
+      lv_obj_center(mbox);
     }
     if (m[i]->getRampRun())
     {
-      lv_slider_set_value(slider[i], m[i]->getRampRpm() * 10, LV_ANIM_ON);
+      lv_slider_set_value(slider[i], m[i]->getRampRpm(), LV_ANIM_ON);
     }
     if (showErr[i])
     {
@@ -416,7 +426,7 @@ void loop()
         fp.close();
       }
     }
-    Serial.println(m[0]->pwm);
+   // Serial.println(m[0]->pwm);
     // Serial.println(m[0]->targetPos);
     /*
     if(lv_scr_act() == mainScr ) {
@@ -463,9 +473,8 @@ void rnd_event_cb(lv_event_t *e)
   if (code == LV_EVENT_CLICKED)
   {
     UltraServo *s = m[lv_tabview_get_tab_act(tabView)];
-
-    if (s->getRpmRun())
-    {
+    lv_obj_t *obj = lv_event_get_target(e);
+    if(!( lv_obj_get_state(obj) & LV_STATE_CHECKED)) {
       s->stop();
     }
     else
@@ -492,8 +501,8 @@ void ramp_event_cb(lv_event_t *e)
   if (code == LV_EVENT_CLICKED)
   {
     UltraServo *s = m[lv_tabview_get_tab_act(tabView)];
-    if (s->getRampRun())
-    {
+    lv_obj_t *obj = lv_event_get_target(e);
+    if( !(lv_obj_get_state(obj) & LV_STATE_CHECKED)) {
       s->stop();
     }
     else
@@ -592,6 +601,12 @@ void dd_event_cb(lv_event_t *e)
 
   if (code == LV_EVENT_VALUE_CHANGED)
   {
+    if(mode == 10) { //  restore pid from haptic
+      m[0]->kp = m0psav;
+      m[0]->kd = m0dsav;
+      m[1]->kp = m1psav;
+      m[1]->kd = m1dsav;
+    }
     lv_obj_clear_state(runcb, LV_STATE_CHECKED);
     mode = -1;
     m[0]->enable(false);
@@ -612,6 +627,12 @@ void run_event_cb(lv_event_t *e)
       if (mode == 8)
       {
         writeLearn = true;
+      }
+      if(mode == 10) { //  restore pid from haptic
+        m[0]->kp = m0psav;
+        m[0]->kd = m0dsav;
+        m[1]->kp = m1psav;
+        m[1]->kd = m1dsav;
       }
       mode = -1;
       m[0]->enable(false);
@@ -676,6 +697,28 @@ void run_event_cb(lv_event_t *e)
         m[0]->enable(true);
         m[1]->enable(true);
         mode = 9;
+      }
+      else if (!strcmp(buf, "Haptic"))
+      {
+        m0psav = m[0]->kp;
+        m[0]->kp = 5;
+        m0dsav = m[0]->kd;
+        m[0]->kd = 0;
+        m1psav = m[1]->kp;
+        m[1]->kp = 5;
+        m1dsav = m[1]->kd;
+        m[1]->kd = 0;
+
+        m[0]->enable(true);
+        m[1]->enable(true);
+        mode = 10;
+      }
+      else if (!strcmp(buf, "Speed Ctrl"))
+      {
+        m[0]->enable(true);
+        m[1]->enable(true); // toggle to reset encoder
+        m[1]->enable(false);
+        mode = 11;
       }
     }
   }
@@ -798,7 +841,9 @@ void buildConfigScreen()
                                     "Sequence\n"
                                     "Clock\n"
                                     "Learn M2\n"
-                                    "Play Both");
+                                    "Play Both\n"
+                                    "Haptic\n"
+                                    "Speed Ctrl");
 
   lv_obj_set_pos(dropdown, 10, 0);
   lv_obj_set_size(dropdown, 200, 40);
