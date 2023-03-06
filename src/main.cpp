@@ -32,7 +32,13 @@
 UltraServo servo1(M1ENCP1, M1ENCP2, PWM1PIN, M1PIND1, M1PIND2, SAMPLERATE, PWMBIAS);
 UltraServo servo2(M2ENCP1, M2ENCP2, PWM2PIN, M2PIND1, M2PIND2, SAMPLERATE, PWMBIAS);
 UltraServo *m[MOTCOUNT] = {&servo1, &servo2};
-int seq[] = {-111, 0, 111, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, -110, -100, -90, -80, -70, -60, -50, -40, -30, -20, -10, 0};
+int seq[] =     {-200, 0  , 150, -200,  0, -150, 200, -150, 200, -250, 300, 0  , -270, 0  , 230, -270, 0  , 230 , -270, 230 , -180, 230, -150,0};
+int seqTime[] = { 200, 100, 100, 200, 100, 100 , 100, 100 , 100,  100, 200, 200,  200, 100, 100, 200 , 100, 100 , 100 , 100 , 100 , 100, 200,500};
+//int seq[] =     {-200, 0  , 150, -200,  0, -150, 200, -150, 200, -250, 300, 0  , -270, 0  , 230, -270, 0  , 230 , -270, 230 , -180, 230, -150,0,
+//200,  0  ,-200,   0, 250,   0, 225,   0, 200,   0, 200, 150,   0, 150, 200,   0, 250, 150,   0, 225,  0, 200,   0, 200,   0};
+//int seqTime[] = { 200, 100, 100, 200, 100, 100 , 100, 100 , 100,  100, 200, 200,  200, 100, 100, 200 , 100, 100 , 100 , 100 , 100 , 100, 200,500,
+//100 , 100,200 , 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100};
+
 int seqPtr = 0;
 int seqDly = 0;
 bool seqRun = false;
@@ -102,8 +108,9 @@ void touch_calibrate()
       File f = SPIFFS.open(CALIBRATION_FILE, "r");
       if (f)
       {
-        if (f.readBytes((char *)calData, 14) == 14)
+        if (f.readBytes((char *)calData, 14) == 14) {
           calDataOK = 1;
+        }
         f.close();
       }
     }
@@ -123,15 +130,10 @@ void touch_calibrate()
     tft.println("Touch corners as indicated");
     tft.setTextFont(1);
     tft.println();
-    if (REPEAT_CAL)
-    {
-      tft.setTextColor(TFT_RED, TFT_BLACK);
-      tft.println("Set REPEAT_CAL to false to stop this running again!");
-    }
-
     tft.calibrateTouch(calData, TFT_MAGENTA, TFT_BLACK, 15);
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
     tft.println("Calibration complete!");
+    delay(2000);
     File f = SPIFFS.open(CALIBRATION_FILE, "w");
     if (f)
     {
@@ -235,9 +237,9 @@ void IRAM_ATTR timerISR()
     }
     else
     {
-      seqDly = SEQUENCEDELAY;
-      m[0]->setTargetPos(seq[seqPtr]);
-      m[1]->setTargetPos(seq[seqPtr] * -1);
+      seqDly = seqTime[seqPtr];
+      m[0]->setRpm(seq[seqPtr]);
+   //   m[1]->setRpm(seq[seqPtr] * -1);
       seqPtr++;
       if (seqPtr >= sizeof(seq) / sizeof(int))
       {
@@ -301,7 +303,7 @@ void setup()
 #endif
 
   tft.begin();        /* TFT init */
-  tft.setRotation(1); /* Portrait orientation */
+  tft.setRotation(3); /* Portrait orientation */
   // check file system exists
   if (!SPIFFS.begin())
   {
@@ -315,6 +317,7 @@ void setup()
     SPIFFS.begin();
   }
   touch_calibrate();
+  
   lv_disp_draw_buf_init(&disp_buf, buf, NULL, HOR_RES * 10);
   lv_disp_drv_init(&disp_drv);
   disp_drv.draw_buf = &disp_buf;
@@ -388,7 +391,7 @@ void loop()
     }
     if (showVel[i])
     {
-      lv_chart_set_next_value(pidchart[i], ser2[i], m[i]->getVelocity() + 32);
+      lv_chart_set_next_value(pidchart[i], ser2[i], m[i]->getVelocity() * 5 + 32);
     }
     int v = m[i]->getEncPos() % COUNTSPERREVOLUTION;
     if (v < 0)
@@ -828,8 +831,8 @@ void buildConfigScreen()
     lv_obj_set_size(cb, 40, 30);
     lv_obj_add_event_cb(cb, vel_event_cb, LV_EVENT_ALL, (void *)i);
 
-    bloomButton(tab, 0, 145, 30, 20, "^", up_event_cb);
-    bloomButton(tab, 0, 165, 30, 20, "V", dn_event_cb);
+    bloomButton(tab, 0, 145, 20, 20, "^", up_event_cb);
+    bloomButton(tab, 0, 165, 20, 20, "V", dn_event_cb);
   }
   lv_obj_t *tabTest = lv_tabview_add_tab(tabView, "Both");
   dropdown = lv_dropdown_create(tabTest);
