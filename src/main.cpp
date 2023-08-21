@@ -32,13 +32,13 @@
 UltraServo servo1(M1ENCP1, M1ENCP2, PWM1PIN, M1PIND1, M1PIND2, SAMPLERATE, PWMBIAS);
 UltraServo servo2(M2ENCP1, M2ENCP2, PWM2PIN, M2PIND1, M2PIND2, SAMPLERATE, PWMBIAS);
 UltraServo *m[MOTCOUNT] = {&servo1, &servo2};
-int seq[] =     {-200, 0  , 150, -200,  0, -150, 200, -150, 200, -250, 300, 0  , -270, 0  , 230, -270, 0  , 230 , -270, 230 , -180, 230, -150,0};
-int seqTime[] = { 200, 100, 100, 200, 100, 100 , 100, 100 , 100,  100, 200, 200,  200, 100, 100, 200 , 100, 100 , 100 , 100 , 100 , 100, 200,500};
-//int seq[] =     {-200, 0  , 150, -200,  0, -150, 200, -150, 200, -250, 300, 0  , -270, 0  , 230, -270, 0  , 230 , -270, 230 , -180, 230, -150,0,
-//200,  0  ,-200,   0, 250,   0, 225,   0, 200,   0, 200, 150,   0, 150, 200,   0, 250, 150,   0, 225,  0, 200,   0, 200,   0};
-//int seqTime[] = { 200, 100, 100, 200, 100, 100 , 100, 100 , 100,  100, 200, 200,  200, 100, 100, 200 , 100, 100 , 100 , 100 , 100 , 100, 200,500,
-//100 , 100,200 , 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100};
-
+int seq[] = {-200, 0, 150, -200, 0, -150, 200, -150, 200, -250, 300, 0, -270, 0, 230, -270, 0, 230, -270, 230, -180, 230, -150, 0};
+int seqTime[] = {200, 100, 100, 200, 100, 100, 100, 100, 100, 100, 200, 200, 200, 100, 100, 200, 100, 100, 100, 100, 100, 100, 200, 500};
+// int seq[] =     {-200, 0  , 150, -200,  0, -150, 200, -150, 200, -250, 300, 0  , -270, 0  , 230, -270, 0  , 230 , -270, 230 , -180, 230, -150,0,
+// 200,  0  ,-200,   0, 250,   0, 225,   0, 200,   0, 200, 150,   0, 150, 200,   0, 250, 150,   0, 225,  0, 200,   0, 200,   0};
+// int seqTime[] = { 200, 100, 100, 200, 100, 100 , 100, 100 , 100,  100, 200, 200,  200, 100, 100, 200 , 100, 100 , 100 , 100 , 100 , 100, 200,500,
+// 100 , 100,200 , 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100};
+int qtrCtr = 0;
 int seqPtr = 0;
 int seqDly = 0;
 bool seqRun = false;
@@ -54,13 +54,14 @@ lv_disp_drv_t disp_drv;
 lv_indev_drv_t indev_drv;
 lv_color_t buf[HOR_RES * 10];
 lv_obj_t *pidchart[MOTCOUNT], *numpadScr;
-lv_chart_series_t *ser1[MOTCOUNT], *ser2[MOTCOUNT];
+lv_chart_series_t *ser1[MOTCOUNT], *ser2[MOTCOUNT], *ser3[MOTCOUNT];
 lv_obj_t *slider_label[MOTCOUNT];
 lv_obj_t *slider[MOTCOUNT];
 lv_obj_t *pwrsw[MOTCOUNT];
 lv_obj_t *meter[MOTCOUNT];
 bool showErr[MOTCOUNT];
 bool showVel[MOTCOUNT];
+bool showPWM[MOTCOUNT];
 lv_meter_indicator_t *indic[MOTCOUNT];
 lv_obj_t *buildNumpadScreen();
 lv_obj_t *mainScr, *tabView, *dropdown, *runcb;
@@ -108,7 +109,8 @@ void touch_calibrate()
       File f = SPIFFS.open(CALIBRATION_FILE, "r");
       if (f)
       {
-        if (f.readBytes((char *)calData, 14) == 14) {
+        if (f.readBytes((char *)calData, 14) == 14)
+        {
           calDataOK = 1;
         }
         f.close();
@@ -206,7 +208,7 @@ void IRAM_ATTR timerISR()
     if (randDly <= 0)
     {
       randDly = RAMPPAUSE * 1;
-      int targetPos = random(100);
+      int targetPos = random(200);
       for (int i = 0; i < MOTCOUNT; i++)
       {
         m[i]->setTargetPos(targetPos);
@@ -239,7 +241,7 @@ void IRAM_ATTR timerISR()
     {
       seqDly = seqTime[seqPtr];
       m[0]->setRpm(seq[seqPtr]);
-   //   m[1]->setRpm(seq[seqPtr] * -1);
+      //   m[1]->setRpm(seq[seqPtr] * -1);
       seqPtr++;
       if (seqPtr >= sizeof(seq) / sizeof(int))
       {
@@ -281,13 +283,60 @@ void IRAM_ATTR timerISR()
       m[0]->setTargetPos(learnAry[learnPtr]);
       m[1]->setTargetPos(learnAry[learnPtr++]);
     }
-  } 
-  else if (mode == 10) { // haptic
-      m[0]->setTargetPos(m[1]->getEncPos());
-      m[1]->setTargetPos(m[0]->getEncPos());
   }
-  else if (mode == 11) { // Speed Ctrl
-      m[0]->setRpm(m[1]->getEncPos());
+  else if (mode == 10)
+  { // haptic
+    m[0]->setTargetPos(m[1]->getEncPos());
+    m[1]->setTargetPos(m[0]->getEncPos());
+  }
+  else if (mode == 11)
+  { // Speed Ctrl
+    m[0]->setRpm(m[1]->getEncPos());
+  }
+  else if (mode == 12)
+  { // Quarters
+    secDiv++;
+    if (secDiv % qtrCtr == 0)
+    {
+      m[0]->setTargetPos(COUNTSPERREVOLUTION / 4 * secDiv / qtrCtr);
+      m[1]->setTargetPos(COUNTSPERREVOLUTION / 4 * secDiv / qtrCtr);
+      if (secDiv % (qtrCtr * 8) == 0)
+      {
+        qtrCtr -= 10;
+        secDiv = 0;
+
+        if (qtrCtr <= 0)
+        {
+          qtrCtr = 100;
+        }
+      }
+    }
+  }
+  else if (mode == 13)
+  { // Friction
+
+    secDiv++;
+    if (secDiv > 1)
+    {
+      secDiv = 0;
+      m[0]->setTargetPos(m[0]->getEncPos());
+      m[1]->setTargetPos(m[1]->getEncPos());
+      
+      /*
+      int r0 = m[0]->getRpm();
+      if (r0 > 0)
+        r0--;
+      else if (r0 < 0)
+        r0++;
+      m[0]->setRpm(r0);
+      int r1 = m[1]->getRpm();
+      if (r1 > 0)
+        r1--;
+      else if (r1 < 0)
+        r1++;
+      m[1]->setRpm(r1);
+      */
+    }
   }
 }
 
@@ -317,7 +366,7 @@ void setup()
     SPIFFS.begin();
   }
   touch_calibrate();
-  
+
   lv_disp_draw_buf_init(&disp_buf, buf, NULL, HOR_RES * 10);
   lv_disp_drv_init(&disp_drv);
   disp_drv.draw_buf = &disp_buf;
@@ -362,12 +411,13 @@ static void mb_event_cb(lv_event_t *e)
 {
   if (lv_event_get_code(e) == LV_EVENT_PRESSED)
   {
-    lv_msgbox_close(lv_obj_get_parent( lv_event_get_target(e)));
+    lv_msgbox_close(lv_obj_get_parent(lv_event_get_target(e)));
   }
 }
 void loop()
 {
   lv_task_handler();
+  Serial.println(m[0]->getRpm());
   for (int i = 0; i < MOTCOUNT; i++)
   {
     if (m[i]->getStallFlg())
@@ -393,9 +443,15 @@ void loop()
     {
       lv_chart_set_next_value(pidchart[i], ser2[i], m[i]->getVelocity() * 5 + 32);
     }
+    if (showPWM[i])
+    {
+      lv_chart_set_next_value(pidchart[i], ser3[i], m[i]->pwm / 8 + 32);
+    }
     int v = m[i]->getEncPos() % COUNTSPERREVOLUTION;
     if (v < 0)
+    {
       v += COUNTSPERREVOLUTION;
+    }
     lv_meter_set_indicator_end_value(meter[i], indic[i], v);
     // this needs to happen outside ISR
     if (clrRunflg)
@@ -428,8 +484,17 @@ void loop()
         fp.write((const unsigned char *)&m[1]->kd, sizeof(double));
         fp.close();
       }
+
+      if (m[i]->cntFlt != m[i]->lstFlt)
+      {
+        Serial.print("M ");
+        Serial.print(i);
+        Serial.print(" flt ");
+        Serial.println(m[i]->cntFlt);
+        m[i]->lstFlt = m[i]->cntFlt;
+      }
     }
-   // Serial.println(m[0]->pwm);
+    // Serial.println(m[0]->pwm);
     // Serial.println(m[0]->targetPos);
     /*
     if(lv_scr_act() == mainScr ) {
@@ -459,14 +524,6 @@ void loop()
     }
      */
   }
-  /*    if (servo1.cntFlt != lstFlt)
-      {
-        Serial.print("flt ");
-        Serial.println(servo1.cntFlt);
-        lstFlt = servo1.cntFlt;
-
-      }
-  */
 }
 
 void rnd_event_cb(lv_event_t *e)
@@ -477,7 +534,8 @@ void rnd_event_cb(lv_event_t *e)
   {
     UltraServo *s = m[lv_tabview_get_tab_act(tabView)];
     lv_obj_t *obj = lv_event_get_target(e);
-    if(!( lv_obj_get_state(obj) & LV_STATE_CHECKED)) {
+    if (!(lv_obj_get_state(obj) & LV_STATE_CHECKED))
+    {
       s->stop();
     }
     else
@@ -505,7 +563,8 @@ void ramp_event_cb(lv_event_t *e)
   {
     UltraServo *s = m[lv_tabview_get_tab_act(tabView)];
     lv_obj_t *obj = lv_event_get_target(e);
-    if( !(lv_obj_get_state(obj) & LV_STATE_CHECKED)) {
+    if (!(lv_obj_get_state(obj) & LV_STATE_CHECKED))
+    {
       s->stop();
     }
     else
@@ -587,6 +646,21 @@ void vel_event_cb(lv_event_t *e)
   }
 }
 
+void pwm_event_cb(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  lv_obj_t *obj = lv_event_get_target(e);
+  if (code == LV_EVENT_VALUE_CHANGED)
+  {
+    int i = lv_tabview_get_tab_act(tabView);
+    showPWM[i] = lv_obj_get_state(obj) & LV_STATE_CHECKED;
+    if (!showPWM[i])
+    {
+      lv_chart_set_all_value(pidchart[i], ser3[i], LV_CHART_POINT_NONE);
+    }
+  }
+}
+
 void sw_event_cb(lv_event_t *e)
 {
   lv_event_code_t code = lv_event_get_code(e);
@@ -604,7 +678,8 @@ void dd_event_cb(lv_event_t *e)
 
   if (code == LV_EVENT_VALUE_CHANGED)
   {
-    if(mode == 10) { //  restore pid from haptic
+    if (mode == 10 )
+    { //  restore pid from haptic
       m[0]->kp = m0psav;
       m[0]->kd = m0dsav;
       m[1]->kp = m1psav;
@@ -631,7 +706,8 @@ void run_event_cb(lv_event_t *e)
       {
         writeLearn = true;
       }
-      if(mode == 10) { //  restore pid from haptic
+      if (mode == 10 )
+      { //  restore pid from haptic
         m[0]->kp = m0psav;
         m[0]->kd = m0dsav;
         m[1]->kp = m1psav;
@@ -673,7 +749,7 @@ void run_event_cb(lv_event_t *e)
         m[1]->enable(false);
         mode = 5;
       }
-      else if (!strcmp(buf, "Sequence"))
+      else if (!strcmp(buf, "Mot-zart"))
       {
         m[0]->enable(true);
         m[1]->enable(true);
@@ -722,6 +798,31 @@ void run_event_cb(lv_event_t *e)
         m[1]->enable(true); // toggle to reset encoder
         m[1]->enable(false);
         mode = 11;
+      }
+      else if (!strcmp(buf, "Quarters"))
+      {
+        qtrCtr = 100;
+        secDiv = 0;
+        m[0]->enable(true);
+        m[1]->enable(true);
+        mode = 12;
+      }
+      else if (!strcmp(buf, "Friction"))
+      {
+        /*
+        m0psav = m[0]->kp;
+        m[0]->kp = 5;
+        m0dsav = m[0]->kd;
+        m[0]->kd = 0;
+        m1psav = m[1]->kp;
+        m[1]->kp = 5;
+        m1dsav = m[1]->kd;
+        m[1]->kd = 0;
+*/
+        secDiv = 0;
+        m[0]->enable(true);
+        m[1]->enable(true);
+        mode = 13;
       }
     }
   }
@@ -786,12 +887,13 @@ void buildConfigScreen()
 
     ser1[i] = lv_chart_add_series(pidchart[i], lv_color_make(255, 0, 0), LV_CHART_AXIS_PRIMARY_Y);
     ser2[i] = lv_chart_add_series(pidchart[i], lv_color_make(0, 255, 0), LV_CHART_AXIS_PRIMARY_Y);
+    ser3[i] = lv_chart_add_series(pidchart[i], lv_color_make(0, 0, 255), LV_CHART_AXIS_PRIMARY_Y);
 
     floatButton(tab, 0, 110, 35, 30, &m[i]->kp);
     floatButton(tab, 40, 110, 35, 30, &m[i]->ki);
     floatButton(tab, 80, 110, 35, 30, &m[i]->kd);
-    lv_obj_add_flag(bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb),LV_OBJ_FLAG_CHECKABLE);
-    lv_obj_add_flag(bloomButton(tab, 160, 110, 35, 30, "Rpm", rnd_event_cb),LV_OBJ_FLAG_CHECKABLE);
+    lv_obj_add_flag(bloomButton(tab, 120, 110, 35, 30, "Rmp", ramp_event_cb), LV_OBJ_FLAG_CHECKABLE);
+    lv_obj_add_flag(bloomButton(tab, 160, 110, 35, 30, "Rpm", rnd_event_cb), LV_OBJ_FLAG_CHECKABLE);
 
     pwrsw[i] = lv_switch_create(tab);
     lv_obj_set_pos(pwrsw[i], 200, 110);
@@ -799,7 +901,7 @@ void buildConfigScreen()
     lv_obj_add_event_cb(pwrsw[i], sw_event_cb, LV_EVENT_ALL, NULL);
 
     slider[i] = lv_slider_create(tab);
-    lv_obj_set_pos(slider[i], 40, 150);
+    lv_obj_set_pos(slider[i], 40, 160);
     lv_obj_set_size(slider[i], 250, 30);
     lv_obj_add_event_cb(slider[i], slider_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_slider_set_range(slider[i], 0, COUNTSPERREVOLUTION + 1); // one full revolution
@@ -820,19 +922,26 @@ void buildConfigScreen()
     lv_obj_t *cb = lv_checkbox_create(tab);
     lv_checkbox_set_text(cb, "E");
     lv_obj_set_style_text_color(cb, lv_palette_main(LV_PALETTE_RED), 0);
-    lv_obj_set_pos(cb, 255, 105);
+    lv_obj_set_pos(cb, 255, 100);
     lv_obj_set_size(cb, 40, 30);
     lv_obj_add_event_cb(cb, err_event_cb, LV_EVENT_ALL, (void *)i);
 
     cb = lv_checkbox_create(tab);
     lv_checkbox_set_text(cb, "V");
     lv_obj_set_style_text_color(cb, lv_palette_main(LV_PALETTE_GREEN), 0);
-    lv_obj_set_pos(cb, 255, 125);
+    lv_obj_set_pos(cb, 255, 120);
     lv_obj_set_size(cb, 40, 30);
     lv_obj_add_event_cb(cb, vel_event_cb, LV_EVENT_ALL, (void *)i);
 
-    bloomButton(tab, 0, 145, 20, 20, "^", up_event_cb);
-    bloomButton(tab, 0, 165, 20, 20, "V", dn_event_cb);
+    cb = lv_checkbox_create(tab);
+    lv_checkbox_set_text(cb, "P");
+    lv_obj_set_style_text_color(cb, lv_palette_main(LV_PALETTE_BLUE), 0);
+    lv_obj_set_pos(cb, 255, 135);
+    lv_obj_set_size(cb, 40, 30);
+    lv_obj_add_event_cb(cb, pwm_event_cb, LV_EVENT_ALL, (void *)i);
+
+    bloomButton(tab, 0, 150, 20, 20, "^", up_event_cb);
+    bloomButton(tab, 0, 170, 20, 20, "V", dn_event_cb);
   }
   lv_obj_t *tabTest = lv_tabview_add_tab(tabView, "Both");
   dropdown = lv_dropdown_create(tabTest);
@@ -841,12 +950,14 @@ void buildConfigScreen()
                                     "M2 follow M1\n"
                                     "M1 follow M2 REV\n"
                                     "M2 follow M1 REV\n"
-                                    "Sequence\n"
+                                    "Mot-zart\n"
                                     "Clock\n"
                                     "Learn M2\n"
                                     "Play Both\n"
                                     "Haptic\n"
-                                    "Speed Ctrl");
+                                    "Speed Ctrl\n"
+                                    "Quarters\n"
+                                    "Friction");
 
   lv_obj_set_pos(dropdown, 10, 0);
   lv_obj_set_size(dropdown, 200, 40);

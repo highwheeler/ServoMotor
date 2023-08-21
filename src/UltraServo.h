@@ -37,6 +37,7 @@ public:
 	void stop();
 	void startRandom(int);
 	void setRpm(int);
+	int getRpm();
 	bool getRandomRun();
 	bool getRpmRun();
 	void startRamp(int);
@@ -53,6 +54,7 @@ public:
 	double ki = 0;
 	double kd = 350;
 	int pwm = 0, lstPwm = 0;
+	int cntFlt = 0, lstFlt = 0;
 private:
 	static void myledcWrite(uint8_t chan, uint32_t duty);
 	static void __digitalWrite(uint8_t pin, uint8_t val);
@@ -73,9 +75,10 @@ private:
 	static void timerISR3();
 	static void timerISR4();
 	int randLen;
+	unsigned int timerFactor;
 	const int freq = 5000;
-	short int rpmCnt = 0;
-	short int encLst = 0, encCtr = 0, encPrev = 0, cntFlt = 0, targetPos = 0, tmpRpm = 0, error = 0, sumError = 0;
+	int rpmCnt = 0;
+	int encLst = 0, encCtr = 0, encPrev = 0,  targetPos = 0, tmpRpm = 0, error = 0, sumError = 0, realRpm = 0, tmpRpmCtr = 1;
 	const int resolution = 8;
 	int instNum;
 	bool runFlg = false;

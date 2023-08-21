@@ -21,7 +21,7 @@ UltraServo::UltraServo(int _enc1pin, int _enc2pin, int _pwmPin, int _dir1pin,
   digitalWrite(_dir2pin, true);
   timer = timerBegin(numInst, 80, true); // Begin timer with 1 MHz frequency (80MHz/80)
   timerAttachInterrupt(timer, (void (*)())timerIsr[numInst], true);
-  unsigned int timerFactor = 1000000 / _sampleRate;
+  timerFactor = 1000000 / _sampleRate;
   timerAlarmWrite(timer, timerFactor, true);
   timerAlarmEnable(timer);
   if (_enc1pin < 32)
@@ -124,20 +124,27 @@ void IRAM_ATTR UltraServo::timerISR(UltraServo *inst)
 {
   //  portENTER_CRITICAL(&myMutex);
   //  if(inst->instNum == 0) __digitalWrite(OUTPULSE, LOW);
-
-  inst->tmpRpm = inst->encCtr;
   inst->error = inst->targetPos - inst->encCtr;
   inst->velocity = inst->encCtr - inst->encPrev;
   inst->encPrev = inst->encCtr;
+  inst->tmpRpm += inst->velocity;
+
+  inst->tmpRpmCtr--;
+  if(inst->tmpRpmCtr == 0) {
+    inst->realRpm = inst->tmpRpm * 2; // / inst->sampleRate * 10;
+    inst->tmpRpm = 0;
+    inst->tmpRpmCtr =100; 
+  }
+
 
   if (inst->runFlg)
   {
     if (inst->rpmRun)
     {
       inst->rpmCnt++;
-      if (inst->rpmCnt > COUNTSPERREVOLUTION * 10)
+      if (inst->rpmCnt > COUNTSPERREVOLUTION * 5)
       {
-        inst->rpmCnt = 0;
+        inst->rpmCnt -= COUNTSPERREVOLUTION * 5;
         inst->rpmOffset = inst->targetPos;
       }
 
@@ -401,6 +408,13 @@ void UltraServo::setRpm(int l)
   rpmVal = l;
 }
 
+
+int UltraServo::getRpm()
+{
+  return realRpm;
+}
+
+
 void UltraServo::startRamp(int len)
 {
   stop();
@@ -454,6 +468,11 @@ void UltraServo::stop()
 }
 void UltraServo::enable(bool flg)
 {
+/*  Serial.print("Enable ");
+  Serial.print(instNum);
+  Serial.print(" = ");
+  Serial.println(flg);
+  */
   runFlg = flg;
   encCtr = 0;
   encPrev = 0;
